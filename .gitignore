@@ -1,0 +1,103 @@
+# Bytecode de Python
+pycache/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales
+.env/
+.venv/
+venv/
+ENV/
+env/
+.virtualenv/
+pip-wheel-metadata/
+
+# Archivos de dependencias compiladas o nativas
+*.so
+*.pyd
+*.dll
+*.dylib
+*.lib
+*.a
+
+# Archivos de salida y cache de tests
+*.log
+*.pot
+*.mo
+.cache
+.cache/
+coverage.
+htmlcov/
+.tox/
+nosetests.xml
+pytest_cache/
+.pytest_cache/
+
+# Archivos temporales de ejecución o sesión
+*.swp
+*.swo
+*.bak
+*.tmp
+*.temp
+*.orig
+*.old
+.DS_Store
+Thumbs.db
+
+# Configuración de VSCode
+.vscode/
+.vscode/settings.json
+.vscode/launch.json
+.vscode/tasks.json
+
+# Archivos de compilación de ANTLR u otros generadores
+*.interp
+*.tokens
+.g4~
+*.class
+*.jar
+
+
+# Archivos de entorno
+.envrc
+.env
+.env.
+
+# Archivos del sistema operativo
+Icon?
+ehthumbs.db
+Desktop.ini
+
+# Archivos de cobertura o herramientas de análisis
+.coverage
+coverage.xml
+*.cover
+
+# Bases de datos temporales
+*.sqlite3
+*.db
+*.db-journal
+
+# Archivos personales
+*.sublime-workspace
+*.sublime-project
+*.code-workspace
+.idea/
+*.iml
+
+# Notebooks (si no quieres subirlos)
+*.ipynb
+Archivos de pruebas locales
+tests/output/
+tmp/
+logs/
+build/
+dist/
+
+# Otros temporales comunes
+*.tgz
+*.tar.gz
+*.zip
+*.egg
+*.egg-info/
+MANIFEST
