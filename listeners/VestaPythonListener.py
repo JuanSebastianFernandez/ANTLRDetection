@@ -1,14 +1,11 @@
-# Este código iría en tu archivo: api/code_analyzer/listeners/VestaPythonListener.py
-
 import re
 import numpy as np
 from antlr4 import CommonTokenStream, ParserRuleContext
 from antlr4.tree.Tree import TerminalNode # Importar TerminalNode
-# ¡IMPORTACIONES CORREGIDAS!
-# Ajusta las rutas relativas según tu estructura de carpetas
 from grammars.Python.PythonLexer import PythonLexer # Lexer para acceder a los tipos de token (ej. PythonLexer.NAME)
 from grammars.Python.PythonParser import PythonParser # Parser para los tipos de contexto (ej. PythonParser.Class_defContext)
 from grammars.Python.PythonParserListener import PythonParserListener # La clase base de la que heredamos
+from signatures.finding_types import PythonSignatures, SENSITIVE_PATH_REGEX_GLOBAL
 
 
 # --- Función de Entropía (se mantiene igual) ---
@@ -19,30 +16,6 @@ def calculate_entropy(data: bytes) -> float:
     entropy = -np.sum([p * np.log2(p) for p in probabilities if p > 0])
     return entropy
 
-# --- Base de Datos de Firmas de Seguridad para Python ---
-SUSPICIOUS_IMPORTS_PYTHON = {
-    "os": {"type": "SYSTEM_CAPABILITY", "severity": "INFO", "desc": "Capacidad de interactuar con el sistema operativo."},
-    "subprocess": {"type": "PROCESS_CAPABILITY", "severity": "MEDIUM", "desc": "Capacidad de crear y gestionar subprocesos, potencial para ejecución de comandos."},
-    "socket": {"type": "NETWORK_CAPABILITY", "severity": "MEDIUM", "desc": "Capacidad de comunicación por red de bajo nivel."},
-    "urllib": {"type": "NETWORK_CAPABILITY", "severity": "MEDIUM", "desc": "Capacidad de realizar peticiones de red."},
-    "requests": {"type": "NETWORK_CAPABILITY", "severity": "MEDIUM", "desc": "Capacidad de realizar peticiones HTTP/S."},
-    "cryptography": {"type": "CRYPTO_CAPABILITY", "severity": "HIGH", "desc": "Uso de una librería de criptografía popular."},
-    "shutil": {"type": "FILE_SYSTEM_DESTRUCTIVE_CAPABILITY", "severity": "HIGH", "desc": "Capacidad de realizar operaciones de archivo destructivas (ej. rmtree)."},
-    "sys": {"type": "SYSTEM_INFO_ACCESS", "severity": "LOW", "desc": "Acceso a parámetros del sistema e intérprete."}, # Añadido por el uso de sys.argv
-    "io": {"type": "FILE_IO_CAPABILITY", "severity": "INFO", "desc": "Capacidad de manipular streams de E/S."} # Añadido por open
-}
-
-DANGEROUS_PATTERNS_PYTHON = {
-    "eval(": {"type": "DANGEROUS_FUNCTION_CALL", "severity": "CRITICAL", "desc": "Ejecución de código dinámico a partir de un string."},
-    "exec(": {"type": "DANGEROUS_FUNCTION_CALL", "severity": "CRITICAL", "desc": "Ejecución de código dinámico."},
-    "os.system(": {"type": "DANGEROUS_FUNCTION_CALL", "severity": "HIGH", "desc": "Ejecución de un comando en el shell del sistema."},
-    "subprocess.run": {"type": "DANGEROUS_FUNCTION_CALL", "severity": "HIGH", "desc": "Ejecución de un comando externo (riesgoso si se usa con shell=True)."},
-    "pickle.load": {"type": "DANGEROUS_FUNCTION_CALL", "severity": "HIGH", "desc": "Deserialización de datos con pickle, puede llevar a ejecución de código arbitrario."},
-    "open(": {"type": "FILE_IO_ACCESS", "severity": "INFO", "desc": "Acceso genérico a archivos."} # Añadido por open
-}
-
-SENSITIVE_PATH_REGEX_PYTHON = re.compile(r"(/etc/|/root/|/home/|/var/log/|~/\.ssh)", re.IGNORECASE)
-
 
 class VestaPythonListener(PythonParserListener):
     """
@@ -52,8 +25,7 @@ class VestaPythonListener(PythonParserListener):
     def __init__(self, token_stream: CommonTokenStream):
         self.token_stream = token_stream
         self.static_findings = []
-        
-        # Recolección de datos para las 12 features
+        self.python_signatures = PythonSignatures()
         self.function_entropies = []
         self.function_sizes = []
         self.string_entropies = []
@@ -69,79 +41,86 @@ class VestaPythonListener(PythonParserListener):
             self.static_findings.append(finding)
             self._finding_ids.add(finding_id)
 
-    # --- Métodos del Listener Adaptados ---
 
-    # Regla: import_stmt
     def enterImport_stmt(self, ctx: PythonParser.Import_stmtContext):
         self.import_count += 1
         import_text = self.token_stream.getText(ctx.start.tokenIndex, ctx.stop.tokenIndex)
-        for pattern, details in SUSPICIOUS_IMPORTS_PYTHON.items():
+        for pattern, details in self.python_signatures.IMPORTS.items():
             # re.escape para patrones con puntos (ej. os.path)
             if re.search(r'\b' + re.escape(pattern) + r'\b', import_text): 
                 self.add_finding({
                     "finding_type": details["type"],
                     "description": f"Import sospechoso detectado: '{pattern}'. Indica: {details['desc']}",
-                    "line": ctx.start.line, "severity": details["severity"]
+                    "line": ctx.start.line, 
+                    "severity": details["severity"]
                 })
 
-    # Regla: class_def_raw (representa la definición cruda de la clase sin decoradores)
+
     def enterClass_def_raw(self, ctx: PythonParser.Class_def_rawContext):
         self.class_and_function_count += 1
         class_name = None
-        # Accedemos al token NAME a través del método name() del contexto
         name_ctx = ctx.name()
+
         if name_ctx:
             class_name = name_ctx.getText()
-        
+
+        details = self.python_signatures.NAMING_CONVENTIONS["OBFUSCATED_CLASS_SHORT_NAME"]
         if class_name:
             if len(class_name) <= 2:
                 self.add_finding({
-                    "finding_type": "OBFUSCATED_CODE",
+                    "finding_type": details["type"],
                     "description": f"Nombre de clase sospechosamente corto: '{class_name}'",
-                    "line": ctx.start.line, "severity": "LOW"
+                    "line": ctx.start.line, 
+                    "severity": details["severity"]
                 })
         else:
             self.add_finding({
-                "finding_type": "OBFUSCATED_CODE", 
-                "description": "Clase con nombre no identificable o estructura inesperada (posible ofuscación).",
-                "line": ctx.start.line, "severity": "MEDIUM"
+                "finding_type": details["type"], 
+                "description": "Clase con nombre no identificable, sin nombre o estructura inesperada (posible ofuscación).",
+                "line": ctx.start.line, 
+                "severity": details["severity"]
             })
 
-    # Regla: function_def_raw (representa la definición cruda de la función sin decoradores)
     def exitFunction_def_raw(self, ctx: PythonParser.Function_def_rawContext):
         self.class_and_function_count += 1
         function_name = None
-        name_ctx = ctx.name() # Accedemos al token NAME a través del método name()
+        name_ctx = ctx.name()
         if name_ctx:
             function_name = name_ctx.getText()
+            # print(f"Function name detected: {function_name}")  # Debugging
 
+        details = self.python_signatures.NAMING_CONVENTIONS["OBFUSCATED_METHOD_SHORT_NAME"]
         if function_name:
             if len(function_name) <= 2:
                 self.add_finding({
-                    "finding_type": "OBFUSCATED_CODE",
+                    "finding_type": details["type"],
                     "description": f"Nombre de función sospechosamente corto: '{function_name}()'",
-                    "line": ctx.start.line, "severity": "LOW"
+                    "line": ctx.start.line, 
+                    "severity": details["severity"]
                 })
             # --- Detección: Polimorfismo y override sospechoso (adaptado para Python) ---
             # Un cuerpo de función que solo contiene 'pass' o es muy simple
             # La regla 'block' contiene una lista de 'statement'
             if ctx.block() and ctx.block().statements(): # Verifica que el bloque y statements existan
                 statements = ctx.block().statements().statement()
-                if len(statements) == 1:
-                    stmt_text = self.token_stream.getText(statements[0].start.tokenIndex, statements[0].stop.tokenIndex)
-                    if stmt_text.strip() == 'pass': # Si el único statement es 'pass'
-                        self.add_finding({
-                            "finding_type": "SUSPICIOUS_OVERRIDE", 
-                            "description": f"Función '{function_name}' con cuerpo 'pass', posible evasión o técnica de ofuscación.",
-                            "line": ctx.start.line, "severity": "MEDIUM"
+                # print(f"Statements in function '{function_name}': {statements}")  # Debugging
+                if self._detected_pass_in_statements(statements):
+                    # Si hay un único statement 'pass', lo consideramos sospechoso
+                    details = self.python_signatures.STRUCTURAL_PATTERNS["SUSPICIOUS_PASS_BODY"]
+                    self.add_finding({
+                        "finding_type": details["type"], 
+                        "description": f"Función '{function_name}' con unico cuerpo 'pass', posible evasión o técnica de ofuscación.",
+                        "line": ctx.start.line, 
+                        "severity": details["severity"]
                         })
         else:
             self.add_finding({
-                "finding_type": "OBFUSCATED_CODE", 
+                "finding_type": details["type"], 
                 "description": "Función con nombre no identificable o estructura inesperada (posible ofuscación).",
-                "line": ctx.start.line, "severity": "MEDIUM"
+                "line": ctx.start.line, 
+                "severity": details["severity"]
             })
-            
+
         # Obtener el texto original de la función completa para entropía y tamaño
         start_index = ctx.start.tokenIndex
         stop_index = ctx.stop.tokenIndex
@@ -161,73 +140,95 @@ class VestaPythonListener(PythonParserListener):
             elif isinstance(child, PythonParser.StringContext):
                 # Para strings normales, usamos getText() y luego eval para desquote.
                 full_string_content += eval(child.getText())
-
+        # print(f"Full string content: {full_string_content}")  # Debugging
         if full_string_content:
             self.string_entropies.append(calculate_entropy(full_string_content.encode('utf-8')))
             
             # Búsqueda de secretos y rutas sensibles
-            if SENSITIVE_PATH_REGEX_PYTHON.search(full_string_content):
+            if SENSITIVE_PATH_REGEX_GLOBAL.search(full_string_content):
+                details = self.python_signatures.STRUCTURAL_PATTERNS["SENSITIVE_PATH_ACCESS"]
                 self.add_finding({
-                    "finding_type": "SENSITIVE_SYSTEM_PATH_ACCESS",
+                    "finding_type": details["type"],
                     "description": "El código contiene un string que parece una ruta a un archivo/directorio sensible del sistema.",
-                    "line": ctx.start.line, "severity": "MEDIUM"
+                    "line": ctx.start.line, 
+                    "severity": details["severity"]
                 })
-            sensitive_keywords = ['password', 'secret', 'apikey', 'privatekey', 'token']
-            for keyword in sensitive_keywords:
+            
+            for keyword, details in self.python_signatures.STRING_KEYWORDS.items(): 
                 if re.search(keyword, full_string_content, re.IGNORECASE):
                     self.add_finding({
-                        "finding_type": "HARDCODED_SECRET",
+                        "finding_type": details["type"],
                         "description": f"Posible secreto/credencial encontrado en un string literal que contiene '{keyword}'",
-                        "line": ctx.start.line, "severity": "HIGH"
+                        "line": ctx.start.line, 
+                        "severity": details["severity"]
                     })
     
     # Regla: simple_stmt (una sentencia simple)
     def enterSimple_stmt(self, ctx: PythonParser.Simple_stmtContext):
         statement_text = self.token_stream.getText(ctx.start.tokenIndex, ctx.stop.tokenIndex)
-        
-        for pattern, details in DANGEROUS_PATTERNS_PYTHON.items(): # Corregido typo
+        # print(f"Simple statement text: {statement_text}")  # Debugging
+        for pattern, details in self.python_signatures.METHOD_CALLS.items():
             if pattern in statement_text:
-                if pattern == "subprocess.run" and "shell=True" not in statement_text:
+                # print(f"Pattern found in simple statement: {pattern}")  # Debugging
+                if pattern == "subprocess.run" and "shell=True" not in statement_text: # Evitar falsos positivos
                     continue 
                 self.add_finding({
                     "finding_type": details["type"],
                     "description": f"Uso detectado de una llamada/patrón potencialmente peligroso: '{pattern}'",
-                    "line": ctx.start.line, "severity": details["severity"]
+                    "line": ctx.start.line, 
+                    "severity": details["severity"]
                 })
         
-        # --- NUEVA DETECCIÓN: Acceso a su propia ruta de ejecución (Self-Aware Code) ---
-        # Patrones para Python: Path(__file__), os.path.abspath(__file__), sys.argv[0], open(__file__)
-        if "Path(__file__)" in statement_text or "os.path.abspath(__file__)" in statement_text or \
-            "sys.argv[0]" in statement_text or "open(__file__)" in statement_text:
-            self.add_finding({
-                "finding_type": "SELF_AWARE_CODE",
-                "description": "El código intenta acceder a su propia ruta de ejecución (posible preludio a auto-modificación/cifrado).",
-                "line": ctx.start.line, "severity": "HIGH"
-            })
+        patterns_self_modification = ["Path(__file__)", "os.path.abspath(__file__)", "sys.argv[0]", "open(__file__)"]
+            
+        for pattern in patterns_self_modification:
+            if pattern in statement_text:
+                # print(f"Self-aware code pattern found: {pattern}")  # Debugging
+                # Si se encuentra un patrón de auto-modificación, se agrega un hallazgo
+                details = self.python_signatures.STRUCTURAL_PATTERNS["SELF_AWARE_CODE_PATH"]
+                self.add_finding({
+                    "finding_type": details["type"],
+                    "description": f"El código intenta acceder a su propia ruta de ejecución mediante: {pattern} (posible preludio a auto-modificación/cifrado).",
+                    "line": ctx.start.line, 
+                    "severity": details["severity"]
+                })
             
     # Regla: if_stmt
     def enterIf_stmt(self, ctx: PythonParser.If_stmtContext):
         # La condición del 'if' está en ctx.named_expression() que a su vez contiene la 'expression'
         condition_text = self.token_stream.getText(ctx.named_expression().start.tokenIndex, ctx.named_expression().stop.tokenIndex)
-        
+        # print(f"Condition text in if statement: {condition_text}")  # Debugging
         if "__name__" in condition_text and ("'__main__'" in condition_text or '"__main__"' in condition_text):
             self.has_main_entry_point = 1
 
     # Regla: except_block
     def enterExcept_block(self, ctx: PythonParser.Except_blockContext):
-        # La regla 'block' contiene una lista de 'statement'
-        if ctx.block() and ctx.block().simple_stmts(): # block puede contener simple_stmts o statements complejos
-            # Recorrer los simple_stmts para buscar 'pass'
-            for simple_stmt_ctx in ctx.block().simple_stmts():
-                stmt_text = self.token_stream.getText(simple_stmt_ctx.start.tokenIndex, simple_stmt_ctx.stop.tokenIndex)
-                print(f"Checking simple statement in except block: {stmt_text}")  # Debugging
-                if stmt_text.strip() == 'pass':
-                    self.add_finding({
-                        "finding_type": "EMPTY_CATCH_BLOCK", 
-                        "description": "Se ha detectado un bloque 'except' que solo contiene 'pass'. Ignorar excepciones puede ocultar errores.",
-                        "line": ctx.start.line, "severity": "MEDIUM"
-                    })
-                    break # Solo necesitamos encontrar uno
+        if ctx.block() and ctx.block().statements():
+            statements = ctx.block().statements().statement()
+            # Verificamos si hay un único statement 'pass' en el bloque except
+            if self._detected_pass_in_statements(statements):
+                details = self.python_signatures.STRUCTURAL_PATTERNS["EMPTY_EXCEPT_BLOCK"]
+                self.add_finding({
+                    "finding_type": details["type"],
+                    "description": "Bloque 'except' vacío o con cuerpo 'pass', puede ocultar errores críticos.",
+                    "line": ctx.start.line, 
+                    "severity": details["severity"]
+                })
+
+    def _detected_pass_in_statements(self, statements: list):
+        """
+        Verifica si hay un único statement 'pass' en una lista de statements.
+        """
+        if len(statements) == 1:
+            stmt_text = self.token_stream.getText(statements[0].start.tokenIndex, statements[0].stop.tokenIndex)
+            stmt_text = stmt_text.splitlines() # Aseguramos que el texto se maneje correctamente
+            stmt_text = [line.strip() for line in stmt_text if line.strip() and  not line.startswith("#")]  # Limpiar líneas vacías y de comentarios subsecuentes lineas abajo
+            # print(f"Checking statement text: {stmt_text}, len: {len(stmt_text)}")  # Debugging
+            if len(stmt_text) == 1 and stmt_text[0].startswith('pass'):
+                return True
+
+
+
 
     # --- Método Final para Obtener las Características Calculadas (se mantiene igual) ---
     def get_analysis_report(self) -> dict:

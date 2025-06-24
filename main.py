@@ -23,6 +23,3 @@ if __name__ == '__main__':
             print(f"Error: {e}")
         # except Exception as e:
         #     print(f"An unexpected error occurred: {e}")
-    
-    # Usamos json.dumps para una impresión bonita y estructurada
-    # print(json.dumps(report, indent=4, ensure_ascii=False))

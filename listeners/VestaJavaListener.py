@@ -1,11 +1,9 @@
-# En tu archivo: api/code_analyzer/listeners/VestaJavaListener.py
-
 import re
 import numpy as np
-from antlr4 import CommonTokenStream, ParserRuleContext
-# Ajusta las rutas según tu estructura
+from antlr4 import CommonTokenStream
 from grammars.Java.JavaParser import JavaParser
 from grammars.Java.JavaParserListener import JavaParserListener
+from signatures.finding_types import JavaSignatures, SENSITIVE_PATH_REGEX_GLOBAL
 
 # --- Función de Entropía (se mantiene igual) ---
 # ... (código de la función calculate_entropy)
@@ -16,23 +14,7 @@ def calculate_entropy(data: bytes) -> float:
     entropy = -np.sum([p * np.log2(p) for p in probabilities if p > 0])
     return entropy
 
-# --- Base de Datos de Firmas de Seguridad (Ampliada) ---
-SUSPICIOUS_IMPORTS = {
-    "java.io.File": {"type": "FILE_IO_CAPABILITY", "severity": "INFO", "desc": "Capacidad de manipulación de archivos."},
-    "java.io.FileOutputStream": {"type": "FILE_WRITE_CAPABILITY", "severity": "MEDIUM", "desc": "Capacidad de escritura de archivos, potencial para cifrado/sobreescritura."},
-    "java.nio.file.Files": {"type": "ADVANCED_FILE_IO_CAPABILITY", "severity": "MEDIUM", "desc": "Capacidades avanzadas de manipulación de archivos."},
-    "javax.crypto": {"type": "CRYPTO_CAPABILITY", "severity": "HIGH", "desc": "Uso de la API de Criptografía de Java."},
-    "java.net": {"type": "NETWORK_CAPABILITY", "severity": "MEDIUM", "desc": "Capacidad de comunicación por red."}
-}
 
-SUSPICIOUS_METHOD_CALLS = {
-    "Runtime.getRuntime().exec": {"type": "DANGEROUS_FUNCTION_CALL", "severity": "CRITICAL", "desc": "Ejecución de comandos nativos del sistema operativo."},
-    ".delete": {"type": "SUSPICIOUS_FILE_OPERATION", "severity": "HIGH", "desc": "Llamada a la eliminación de archivos."},
-    "getClass().getProtectionDomain().getCodeSource().getLocation": {"type": "SELF_AWARE_CODE", "severity": "HIGH", "desc": "Código que intenta localizar su propia ruta de ejecución."}
-}
-
-# --- Regex para rutas de sistema sensibles ---
-SENSITIVE_PATH_REGEX = re.compile(r"(C:\\|/)(Windows|Users|System32|Program Files|etc|passwd|home|root|bin)", re.IGNORECASE)
 
 
 class VestaJavaListener(JavaParserListener):
@@ -46,6 +28,7 @@ class VestaJavaListener(JavaParserListener):
         self.class_and_method_count = 0
         self.has_main_method = 0
         self._finding_ids = set()
+        self.java_signatures = JavaSignatures()
 
     def add_finding(self, finding: dict):
         finding_id = (finding['finding_type'], finding['line'], finding['description'])
@@ -61,11 +44,12 @@ class VestaJavaListener(JavaParserListener):
         
         # --- NUEVA DETECCIÓN: Nombres de clase sospechosos (ofuscación) ---
         if '$' in class_name or len(class_name) <= 2:
+            details = self.java_signatures.NAMING_CONVENTIONS["OBFUSCATED_CLASS_SHORT_NAME"]
             finding = {
-                "finding_type": "OBFUSCATED_CODE",
+                "finding_type": details["type"],
                 "description": f"Nombre de clase sospechoso o generado dinámicamente: '{class_name}'",
                 "line": ctx.start.line,
-                "severity": "MEDIUM"
+                "severity": details["severity"]
             }
             self.add_finding(finding)
 
@@ -78,11 +62,12 @@ class VestaJavaListener(JavaParserListener):
         
         # --- NUEVA DETECCIÓN: Nombres de método sospechosos (ofuscación) ---
         if len(method_name) <= 2:
+            details = self.java_signatures.NAMING_CONVENTIONS["OBFUSCATED_METHOD_SHORT_NAME"]
             finding = {
-                "finding_type": "OBFUSCATED_CODE",
+                "finding_type": details["type"],
                 "description": f"Nombre de método sospechosamente corto (posible ofuscación): '{method_name}()'",
                 "line": ctx.start.line,
-                "severity": "LOW"
+                "severity": details["severity"]
             }
             self.add_finding(finding)
 
@@ -96,11 +81,12 @@ class VestaJavaListener(JavaParserListener):
         
         # Si es un override y su cuerpo es muy simple (vacío o una sola sentencia simple como 'return;')
         if is_override and ctx.methodBody() and ctx.methodBody().block() and len(ctx.methodBody().block().blockStatement()) <= 1:
+            details = self.java_signatures.STRUCTURAL_PATTERNS["SUSPICIOUS_OVERRIDE"]
             finding = {
-                "finding_type": "SUSPICIOUS_OVERRIDE",
+                "finding_type": details["type"],
                 "description": f"El método sobreescrito '{method_name}' tiene un cuerpo vacío o muy simple, posible técnica de evasión.",
                 "line": ctx.start.line,
-                "severity": "MEDIUM"
+                "severity": details["severity"]
             }
             self.add_finding(finding)
             
@@ -117,62 +103,63 @@ class VestaJavaListener(JavaParserListener):
             string_content = string_text[1:-1]
             
             # --- NUEVA DETECCIÓN: Acceso a rutas de sistema sensibles ---
-            if SENSITIVE_PATH_REGEX.search(string_content):
+            if SENSITIVE_PATH_REGEX_GLOBAL.search(string_content):
+                details = self.java_signatures.STRUCTURAL_PATTERNS["SENSITIVE_PATH_ACCESS"] # Obtén detalles si existe, sino None
                 finding = {
-                    "finding_type": "SENSITIVE_SYSTEM_PATH_ACCESS",
-                    "description": f"El código contiene un string que parece una ruta a un archivo/directorio sensible del sistema: '{string_content}'",
+                    "finding_type": details["type"],
+                    "description": f"Acceso a ruta sensible detectado: '{string_content}'",
                     "line": ctx.start.line,
-                    "severity": "MEDIUM"
+                    "severity": details["severity"]
                 }
                 self.add_finding(finding)
+                
 
             # (La lógica para entropía de strings y secretos hardcodeados se mantiene)
             if string_content:
                 self.string_entropies.append(calculate_entropy(string_content.encode('utf-8')))
             
-            sensitive_keywords = ['password', 'secret', 'apikey', 'privatekey', 'token']
-            for keyword in sensitive_keywords:
-                if re.search(keyword, string_content, re.IGNORECASE):
+            for keyword, details in self.java_signatures.STRING_KEYWORDS.items():
+                if re.search(re.escape(keyword), string_content, re.IGNORECASE):
                     self.add_finding({
-                        "finding_type": "HARDCODED_SECRET",
+                        "finding_type": details["type"],
                         "description": f"Posible secreto/credencial encontrado en un string literal que contiene '{keyword}'",
-                        "line": ctx.start.line, "severity": "HIGH"
+                        "line": ctx.start.line, 
+                        "severity": details["severity"]
                     })
 
     def enterMethodCall(self, ctx: JavaParser.MethodCallContext):
         call_text = ctx.getText()
-        for pattern, details in SUSPICIOUS_METHOD_CALLS.items():
+        for pattern, details in self.java_signatures.METHOD_CALLS.items(): # Itera sobre METHOD_CALLS
             if call_text in pattern:
                 self.add_finding({
                     "finding_type": details["type"],
                     "description": f"Uso detectado de una llamada potencialmente peligrosa: '{pattern}'",
-                    "line": ctx.start.line, "severity": details["severity"]
+                    "line": ctx.start.line, 
+                    "severity": details["severity"]
                 })
                 break
     
-    # --- NUEVA DETECCIÓN: Auto-cifrado o borrado (new File(".")) ---
     def enterCreator(self, ctx: JavaParser.CreatorContext):
-        # Detectar la creación de objetos como 'new File(".")'
         if ctx.createdName().getText() == 'File':
             if ctx.classCreatorRest() and ctx.classCreatorRest().arguments().getText() == '(".")':
-                finding = {
-                        "finding_type": "SELF_AWARE_CODE",
-                        "description": "El código accede al directorio actual ('new File(\".\")'), posible preludio a auto-modificación.",
-                        "line": ctx.start.line,
-                        "severity": "MEDIUM"
-                    }
-                self.add_finding(finding)
-
+                details = self.java_signatures.STRUCTURAL_PATTERNS["SELF_AWARE_CODE_FILE_DOT"]
+                self.add_finding({
+                    "finding_type": details["type"],
+                    "description": "El código accede al directorio actual ('new File(\".\")'), posible preludio a auto-modificación.",
+                    "line": ctx.start.line,
+                    "severity": details["severity"]
+                })
 
     def enterImportDeclaration(self, ctx: JavaParser.ImportDeclarationContext):
         self.import_count += 1
         import_text = ctx.qualifiedName().getText()
-        for pattern, details in SUSPICIOUS_IMPORTS.items():
+        for pattern, details in self.java_signatures.IMPORTS.items(): # Itera sobre IMPORTS
             if import_text.startswith(pattern):
                 self.add_finding({
                     "finding_type": details["type"],
                     "description": f"Import sospechoso detectado: '{import_text}'. Indica: {details['desc']}",
-                    "line": ctx.start.line, "severity": details["severity"]
+                    "line": ctx.start.line, 
+                    "severity": details["severity"]
                 })
 
     def enterPackageDeclaration(self, ctx: JavaParser.PackageDeclarationContext):
@@ -180,11 +167,14 @@ class VestaJavaListener(JavaParserListener):
     
     def enterCatchClause(self, ctx: JavaParser.CatchClauseContext):
         if ctx.block() and not ctx.block().blockStatement():
+            details = self.java_signatures.STRUCTURAL_PATTERNS["EMPTY_CATCH_BLOCK"]
             self.add_finding({
-                "finding_type": "EMPTY_CATCH_BLOCK",
+                "finding_type": details["type"],
                 "description": "Se ha detectado un bloque catch vacío. Ignorar excepciones puede ocultar errores críticos de seguridad.",
-                "line": ctx.start.line, "severity": "MEDIUM"
+                "line": ctx.start.line, 
+                "severity": details["severity"]
             })
+
 
     def get_analysis_report(self) -> dict:
         sections_max_entropy = np.max(self.method_entropies) if self.method_entropies else 0.0
