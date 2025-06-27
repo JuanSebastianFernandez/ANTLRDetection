@@ -131,25 +131,22 @@ class VestaPythonListener(PythonParserListener):
     # Regla: strings (que agrupa tokens STRING y FSTRING)
     def enterStrings(self, ctx: PythonParser.StringsContext):
         full_string_content = ""
-        # La regla 'strings' puede contener 'fstring' o 'string' individuales
         for child in ctx.children:
-            if isinstance(child, PythonParser.FstringContext):
-                # Para f-strings, necesitamos obtener el texto del 'FSTRING_MIDDLE' y otros.
-                # Simplificamos obteniendo el texto completo del fstring.
+            if type(child).__name__ == "FstringContext":
+                # Para f-strings, obtenemos el texto completo del fstring.
                 full_string_content += self.token_stream.getText(child.start.tokenIndex, child.stop.tokenIndex)
-            elif isinstance(child, PythonParser.StringContext):
+            elif type(child).__name__ == "StringContext":
                 # Para strings normales, usamos getText() y luego eval para desquote.
                 full_string_content += eval(child.getText())
         # print(f"Full string content: {full_string_content}")  # Debugging
         if full_string_content:
             self.string_entropies.append(calculate_entropy(full_string_content.encode('utf-8')))
-            
             # Búsqueda de secretos y rutas sensibles
             if SENSITIVE_PATH_REGEX_GLOBAL.search(full_string_content):
                 details = self.python_signatures.STRUCTURAL_PATTERNS["SENSITIVE_PATH_ACCESS"]
                 self.add_finding({
                     "finding_type": details["type"],
-                    "description": "El código contiene un string que parece una ruta a un archivo/directorio sensible del sistema.",
+                    "description": f"El código contiene un string que parece una ruta a un archivo/directorio ({full_string_content}) sensible del sistema.",
                     "line": ctx.start.line, 
                     "severity": details["severity"]
                 })

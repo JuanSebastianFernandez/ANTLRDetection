@@ -52,8 +52,15 @@ LANGUAGE_CONFIGS_MAP = {
         'parser_class_name': 'PythonParser',
         'listener_class_name': 'VestaPythonListener'
     },
-    # Añade tus otros lenguajes aquí siguiendo el mismo patrón
-    # '.c': { ... },
+    '.c': {
+        'lexer_module': 'grammars.C.CLexer',
+        'parser_module': 'grammars.C.CParser',
+        'listener_module': 'listeners.VestaCListener',
+        'start_rule': 'compilationUnit',
+        'lexer_class_name': 'CLexer',
+        'parser_class_name': 'CParser',
+        'listener_class_name': 'VestaCListener'
+    },
     # '.cpp': { ... },
     # '.cs': { ... },
     # '.sql': { ... },
@@ -91,6 +98,7 @@ class AntlrListenerHandler:
                 "file_path": file_path,
                 "status": "UNSUPPORTED_LANGUAGE",
                 "message": f"Tipo de archivo no soportado para análisis ANTLR: {file_extension}",
+                "amount_findings": 0,
                 "feature_vector": {},
                 "static_findings": []
             }
@@ -133,17 +141,21 @@ class AntlrListenerHandler:
             walker.walk(listener_instance, tree)
             
             report = listener_instance.get_analysis_report()
+            report["amount_findings"] = len(report["static_findings"])
             report["file_path"] = file_path
             report["status"] = "SUCCESS"
+            
             # Debido a que el parsing analiza toda la sintaxis, puede encontrar errores de sintaxis generando un aviso que podemos incluir en el reporte
             if error_listener.errors:
                 report["status"] = "PARSING_ERRORS"
                 report["parsing_errors"] = error_listener.errors
                 report["static_findings"].insert(0, {
                     "finding_type": "PARSING_ISSUE",
-                    "description": "Se encontraron errores de sintaxis al analizar el archivo. Esto podría indicar código malformado o ofuscado.",
-                    "line": 0, "severity": "HIGH", "details": error_listener.errors
+                    "description": "Se encontraron errores de sintaxis al analizar el archivo. Esto podría indicar código malformado o ofuscado. Rrevisar parsing_errors para más detalle",
+                    "line": 0, 
+                    "severity": "HIGH"
                 })
+                report["amount_findings"] = len(report["static_findings"])
             return report
 
         except ImportError as e:

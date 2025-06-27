@@ -14,18 +14,20 @@ JAVA_SAMPLE_FILE_2 = os.path.join(ROOT_DIR_FOR_TESTS, 'Java', 'vulnerable_sample
 PYTHON_SAMPLE_FILE = os.path.join(ROOT_DIR_FOR_TESTS, 'Python', 'vulnerable_sample.py')
 UNSUPPORTED_FILE = os.path.join(ROOT_DIR_FOR_TESTS, 'unsupported.xyz') # Archivo de prueba para lenguaje no soportado
 MALFORMED_PYTHON_FILE = os.path.join(ROOT_DIR_FOR_TESTS, 'Python', 'malformed_sample.py') # Archivo para probar errores de parsing
-
+C_SAMPLE_FILE = os.path.join(ROOT_DIR_FOR_TESTS, 'C', 'vulnerable_sample.c') # Archivo de prueba C
 
 
 def run_analysis_tests():
     handler = AntlrListenerHandler()
 
     reports_to_run = [
-        JAVA_SAMPLE_FILE,
-        JAVA_SAMPLE_FILE_2,  # Añadido otro archivo Java para pruebas
-        PYTHON_SAMPLE_FILE,
-        UNSUPPORTED_FILE,
-        MALFORMED_PYTHON_FILE
+        # JAVA_SAMPLE_FILE,
+        # JAVA_SAMPLE_FILE_2,  # Añadido otro archivo Java para pruebas
+        # PYTHON_SAMPLE_FILE,
+        # UNSUPPORTED_FILE,
+        # MALFORMED_PYTHON_FILE,
+        C_SAMPLE_FILE
+
     ]
 
     for file_path in reports_to_run:

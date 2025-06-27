@@ -18,7 +18,7 @@ FINDING_TYPE_SYSTEM_INFO_ACCESS = "SYSTEM_INFO_ACCESS"
 # Este regex se usará en todos los listeners que necesiten detectar rutas sensibles.
 # Se define una vez aquí y se comparte entre las clases.
 SENSITIVE_PATH_REGEX_GLOBAL = re.compile(
-    r"(C:\\\\|C:/|/)(Windows|Users|System32|Program Files|etc|root|home|var/log|bin|passwd|s?bin|usr|opt|srv|mnt|media|dev|proc|tmp|var|run|lib|usr/local|usr/share|var/tmp|var/run|sys|boot|init|lost\\+found|sbin|var/spool|var/mail|var/cache|var/lib|var/backups|etc/ssh|etc/passwd|etc/shadow|~/\.ssh)", 
+    r"(C:\\\\|C:/|/)(Windows|Users|System32|Program Files|etc|root|home|var/log|bin|passwd|s?bin|usr|opt|srv|mnt|media|dev|proc|tmp|var|run|lib|usr/local|usr/share|var/tmp|var/run|sys|boot|init|lost\\+found|sbin|var/spool|var/mail|var/cache|var/lib|var/backups|etc/ssh|etc/passwd|etc/shadow|~/\.ssh)",  # type: ignore
     re.IGNORECASE
 )
 
@@ -71,6 +71,8 @@ class JavaSignatures(BaseSignatures):
         ".delete": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "HIGH", "desc": "Llamada a la eliminación de archivos."},
         "getClass().getProtectionDomain().getCodeSource().getLocation": {"type": FINDING_TYPE_SELF_AWARE_BEHAVIOR, "severity": "HIGH", "desc": "Código que intenta localizar su propia ruta de ejecución."}
     }
+    STRING_KEYWORDS = BaseSignatures.STRING_KEYWORDS # Reutilizar
+    NAMING_CONVENTIONS = BaseSignatures.NAMING_CONVENTIONS # Reutilizar
 
     STRUCTURAL_PATTERNS = { # Estos patrones son detectados por lógica en el listener, no por un diccionario directo
         "EMPTY_CATCH_BLOCK": {"type": FINDING_TYPE_IMPROPER_ERROR_HANDLING, "severity": "MEDIUM", "desc": "Bloque catch vacío que puede ocultar errores críticos."},
@@ -104,10 +106,55 @@ class PythonSignatures(BaseSignatures):
         "pickle.load": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "HIGH", "desc": "Deserialización de datos con pickle, puede llevar a ejecución de código arbitrario."},
         "open(": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "INFO", "desc": "Acceso genérico a archivos."}
     }
+    STRING_KEYWORDS = BaseSignatures.STRING_KEYWORDS # Reutilizar
+    NAMING_CONVENTIONS = BaseSignatures.NAMING_CONVENTIONS # Reutilizar
 
     STRUCTURAL_PATTERNS = {
         "EMPTY_EXCEPT_BLOCK": {"type": FINDING_TYPE_IMPROPER_ERROR_HANDLING, "severity": "MEDIUM", "desc": "Bloque 'except' vacío que puede ocultar errores críticos."},
         "SUSPICIOUS_PASS_BODY": {"type": FINDING_TYPE_OBFUSCATION_TECHNIQUE, "severity": "MEDIUM", "desc": "Función con cuerpo 'pass', posible evasión o técnica de ofuscación."},
         "SELF_AWARE_CODE_PATH": {"type": FINDING_TYPE_SELF_AWARE_BEHAVIOR, "severity": "HIGH", "desc": "El código intenta acceder a su propia ruta de ejecución."},
         "SENSITIVE_PATH_ACCESS": {"type": FINDING_TYPE_SENSITIVE_DATA_ACCESS, "severity": "HIGH", "desc": "Acceso a rutas sensibles del sistema (ej. /etc/passwd, C:\\Windows)."},
+    }
+
+class CSignatures(BaseSignatures):
+    """
+    Define las firmas de seguridad específicas para el lenguaje C.
+    """
+    IMPORTS = { # En C, los "imports" son más bien inclusiones de cabecera.
+        "stdio.h": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "INFO", "desc": "Inclusión de cabecera stdio.h (operaciones de entrada/salida)."},
+        "stdlib.h": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "INFO", "desc": "Inclusión de cabecera stdlib.h (potencial para ejecución de comandos via system())."},
+        "windows.h": {"type": FINDING_TYPE_SYSTEM_INFO_ACCESS, "severity": "MEDIUM", "desc": "Inclusión de cabecera windows.h (acceso a APIs de Windows)."},
+        "sys/socket.h": {"type": FINDING_TYPE_NETWORK_COMMUNICATION, "severity": "MEDIUM", "desc": "Inclusión de cabecera para sockets de red."},
+        "netinet/in.h": {"type": FINDING_TYPE_NETWORK_COMMUNICATION, "severity": "MEDIUM", "desc": "Inclusión de cabecera para direcciones de internet."},
+        "arpa/inet.h": {"type": FINDING_TYPE_NETWORK_COMMUNICATION, "severity": "MEDIUM", "desc": "Inclusión de cabecera para funciones de conversión de direcciones de internet."},
+        "unistd.h": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "MEDIUM", "desc": "Inclusión de cabecera unistd.h (llamadas a sistema como fork(), exec())."},
+        "fcntl.h": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "INFO", "desc": "Inclusión de cabecera fcntl.h (control de archivos)."},
+        "sys/mman.h": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "HIGH", "desc": "Inclusión de cabecera para gestión de memoria (mmap, potencial para inyección de código)."},
+        "crypt.h": {"type": FINDING_TYPE_CRYPTOGRAPHIC_USE, "severity": "HIGH", "desc": "Inclusión de cabecera para funciones de criptografía."}
+    }
+
+    METHOD_CALLS = {
+        "strcpy": {"type": FINDING_TYPE_IMPROPER_ERROR_HANDLING, "severity": "CRITICAL", "desc": "Uso de strcpy (buffer overflow potencial, sin control de límites)."}, # Vulnerabilidad clásica
+        "strcat": {"type": FINDING_TYPE_IMPROPER_ERROR_HANDLING, "severity": "CRITICAL", "desc": "Uso de strcat (buffer overflow potencial, sin control de límites)."},
+        "gets": {"type": FINDING_TYPE_IMPROPER_ERROR_HANDLING, "severity": "CRITICAL", "desc": "Uso de gets (buffer overflow, función intrínsecamente insegura)."},
+        "sprintf": {"type": FINDING_TYPE_IMPROPER_ERROR_HANDLING, "severity": "CRITICAL", "desc": "Uso de sprintf (buffer overflow potencial si el buffer es pequeño)."},
+        "system": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "CRITICAL", "desc": "Ejecución de comandos del sistema operativo via system()."},
+        "fork": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "MEDIUM", "desc": "Creación de un nuevo proceso (potencial para spawn de malware)."},
+        "exec": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "MEDIUM", "desc": "Familia de funciones exec (reemplazo del proceso actual, potencial para payload)."}, # covers execve, execl, etc.
+        "mmap": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "HIGH", "desc": "Mapeo de archivos/memoria (potencial para inyección/modificación de código)."},
+        "VirtualAlloc": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "HIGH", "desc": "Asignación de memoria virtual (Windows), común en exploits."},
+        "CreateFile": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "MEDIUM", "desc": "Acceso a archivos (Windows API)."},
+        "WriteFile": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "HIGH", "desc": "Escritura de archivos (Windows API)."},
+        "DeleteFile": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "HIGH", "desc": "Borrado de archivos (Windows API)."}
+    }
+    
+    STRING_KEYWORDS = BaseSignatures.STRING_KEYWORDS # Reutilizar
+
+    NAMING_CONVENTIONS = BaseSignatures.NAMING_CONVENTIONS # Reutilizar
+
+    STRUCTURAL_PATTERNS = {
+        "SENSITIVE_PATH_ACCESS": {"type": FINDING_TYPE_SENSITIVE_DATA_ACCESS, "severity": "HIGH", "desc": "Acceso a rutas sensibles del sistema (ej. /etc/passwd, C:\\Windows)."},
+        "SELF_AWARE_CODE_ARGV0": {"type": FINDING_TYPE_SELF_AWARE_BEHAVIOR, "severity": "HIGH", "desc": "El código intenta acceder a su propio nombre de ejecución (argv[0])."},
+        "SIMPLE_FUNCTION_BODY": {"type": FINDING_TYPE_OBFUSCATION_TECHNIQUE, "severity": "MEDIUM", "desc": "Función con cuerpo muy simple o vacío, posible técnica de evasión o placeholder."}
+        # C no tiene try-catch/except como Java/Python.
     }
