@@ -158,3 +158,51 @@ class CSignatures(BaseSignatures):
         "SIMPLE_FUNCTION_BODY": {"type": FINDING_TYPE_OBFUSCATION_TECHNIQUE, "severity": "MEDIUM", "desc": "Función con cuerpo muy simple o vacío, posible técnica de evasión o placeholder."}
         # C no tiene try-catch/except como Java/Python.
     }
+
+class CppSignatures(BaseSignatures):
+    """
+    Define las firmas de seguridad específicas para el lenguaje C++.
+    """
+    IMPORTS = { # En C++, los "imports" son #include.
+        "iostream": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "INFO", "desc": "Inclusión de cabecera iostream (operaciones de entrada/salida)."},
+        "fstream": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "MEDIUM", "desc": "Inclusión de cabecera fstream (manipulación de archivos)."},
+        "windows.h": {"type": FINDING_TYPE_SYSTEM_INFO_ACCESS, "severity": "MEDIUM", "desc": "Inclusión de cabecera windows.h (acceso a APIs de Windows)."},
+        "sys/socket.h": {"type": FINDING_TYPE_NETWORK_COMMUNICATION, "severity": "MEDIUM", "desc": "Inclusión de cabecera para sockets de red (Unix/Linux)."},
+        "netinet/in.h": {"type": FINDING_TYPE_NETWORK_COMMUNICATION, "severity": "MEDIUM", "desc": "Inclusión de cabecera para direcciones de internet (Unix/Linux)."},
+        "arpa/inet.h": {"type": FINDING_TYPE_NETWORK_COMMUNICATION, "severity": "MEDIUM", "desc": "Inclusión de cabecera para funciones de conversión de direcciones de internet (Unix/Linux)."},
+        "unistd.h": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "MEDIUM", "desc": "Inclusión de cabecera unistd.h (llamadas a sistema como fork(), exec() en Unix/Linux)."},
+        "fcntl.h": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "INFO", "desc": "Inclusión de cabecera fcntl.h (control de archivos en Unix/Linux)."},
+        "sys/mman.h": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "HIGH", "desc": "Inclusión de cabecera para gestión de memoria (mmap, potencial para inyección de código en Unix/Linux)."},
+        "cryptopp": {"type": FINDING_TYPE_CRYPTOGRAPHIC_USE, "severity": "HIGH", "desc": "Uso de la librería Crypto++ (criptografía)."},
+        "openssl": {"type": FINDING_TYPE_CRYPTOGRAPHIC_USE, "severity": "HIGH", "desc": "Uso de la librería OpenSSL (criptografía)."}
+    }
+
+    METHOD_CALLS = { # Incluye funciones C-style y métodos C++
+        "strcpy": {"type": FINDING_TYPE_IMPROPER_ERROR_HANDLING, "severity": "CRITICAL", "desc": "Uso de strcpy (buffer overflow potencial, sin control de límites)."},
+        "strcat": {"type": FINDING_TYPE_IMPROPER_ERROR_HANDLING, "severity": "CRITICAL", "desc": "Uso de strcat (buffer overflow potencial, sin control de límites)."},
+        "gets": {"type": FINDING_TYPE_IMPROPER_ERROR_HANDLING, "severity": "CRITICAL", "desc": "Uso de gets (buffer overflow, función intrínsecamente insegura)."},
+        "sprintf": {"type": FINDING_TYPE_IMPROPER_ERROR_HANDLING, "severity": "CRITICAL", "desc": "Uso de sprintf (buffer overflow potencial si el buffer es pequeño)."},
+        "system": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "CRITICAL", "desc": "Ejecución de comandos del sistema operativo via system()."},
+        "fork": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "MEDIUM", "desc": "Creación de un nuevo proceso (potencial para spawn de malware)."},
+        "exec": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "MEDIUM", "desc": "Familia de funciones exec (reemplazo del proceso actual, potencial para payload)."},
+        "mmap": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "HIGH", "desc": "Mapeo de archivos/memoria (potencial para inyección/modificación de código)."},
+        "VirtualAlloc": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "HIGH", "desc": "Asignación de memoria virtual (Windows), común en exploits."},
+        "CreateFile": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "MEDIUM", "desc": "Acceso a archivos (Windows API)."},
+        "WriteFile": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "HIGH", "desc": "Escritura de archivos (Windows API)."},
+        "DeleteFile": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "HIGH", "desc": "Borrado de archivos (Windows API)."},
+        "ShellExecute": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "CRITICAL", "desc": "Ejecución de programas externos (Windows API)."},
+        "URLDownloadToFile": {"type": FINDING_TYPE_NETWORK_COMMUNICATION, "severity": "HIGH", "desc": "Descarga de archivos desde URL (Windows API)."}
+    }
+    
+    STRING_KEYWORDS = BaseSignatures.STRING_KEYWORDS # Reutilizar
+
+    NAMING_CONVENTIONS = BaseSignatures.NAMING_CONVENTIONS # Reutilizar
+
+    STRUCTURAL_PATTERNS = {
+        "SENSITIVE_PATH_ACCESS": {"type": FINDING_TYPE_SENSITIVE_DATA_ACCESS, "severity": "MEDIUM", "desc": "Acceso a rutas sensibles del sistema (ej. /etc/passwd, C:\\Windows)."},
+        "SELF_AWARE_CODE_ARGV0": {"type": FINDING_TYPE_SELF_AWARE_BEHAVIOR, "severity": "HIGH", "desc": "El código intenta acceder a su propio nombre de ejecución (argv[0])."},
+        "EMPTY_FUNCTION_BODY": {"type": FINDING_TYPE_IMPROPER_ERROR_HANDLING, "severity": "MEDIUM", "desc": "Función con cuerpo vacío, posible evasión o placeholder."},
+        "EMPTY_CATCH_BLOCK": {"type": FINDING_TYPE_IMPROPER_ERROR_HANDLING, "severity": "MEDIUM", "desc": "Bloque catch vacío que puede ocultar errores críticos."},
+        "SUSPICIOUS_OVERRIDE": {"type": FINDING_TYPE_OBFUSCATION_TECHNIQUE, "severity": "MEDIUM", "desc": "Método sobreescrito con cuerpo vacío o muy simple, posible técnica de evasión."},
+        "SIMPLE_FUNCTION_BODY": {"type": FINDING_TYPE_OBFUSCATION_TECHNIQUE, "severity": "MEDIUM", "desc": "Función con cuerpo muy simple o vacío, posible técnica de evasión o placeholder."}
+    }

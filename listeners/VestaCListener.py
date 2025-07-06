@@ -117,12 +117,12 @@ class VestaCListener(CListener):
                 if len(body_list) <= 1:
                     if body_list[0] == "return":
                         # Si el cuerpo es solo un 'return;' o similar simple
-                        details_simple_body = self.c_signatures.STRUCTURAL_PATTERNS["SIMPLE_FUNCTION_BODY"]
+                        details = self.c_signatures.STRUCTURAL_PATTERNS["SIMPLE_FUNCTION_BODY"]
                         self.add_finding({
-                            "finding_type": details_simple_body["type"],
+                            "finding_type": details["type"],
                             "description": f"Función '{function_name}' con cuerpo vacio o muy simple, posible técnica de evasión o placeholder.",
                             "line": ctx.start.line, 
-                            "severity": details_simple_body["severity"]
+                            "severity": details["severity"]
                         })
 
 
@@ -161,6 +161,7 @@ class VestaCListener(CListener):
     def enterPostfixExpression(self, ctx: CParser.PostfixExpressionContext):
         # Buscamos llamadas a funciones. Un postfixExpression puede ser un ID(...), obj.method(...), etc.
         # Si tiene un argumento list (LPAR arguments RPAR), es una llamada a función.
+        # print(ctx.getText()) # Debugging
         if ctx.LeftParen() and ctx.RightParen():
             call_text = self.token_stream.getText(ctx.start.tokenIndex, ctx.stop.tokenIndex)
             for pattern, details in self.c_signatures.METHOD_CALLS.items():

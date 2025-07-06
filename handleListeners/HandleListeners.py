@@ -61,7 +61,15 @@ LANGUAGE_CONFIGS_MAP = {
         'parser_class_name': 'CParser',
         'listener_class_name': 'VestaCListener'
     },
-    # '.cpp': { ... },
+    '.cpp': {
+        'lexer_module': 'grammars.CPP.CPP14Lexer',
+        'parser_module': 'grammars.CPP.CPP14Parser',
+        'listener_module': 'listeners.VestaCppListener',
+        'start_rule': 'translationUnit',
+        'lexer_class_name': 'CPP14Lexer',
+        'parser_class_name': 'CPP14Parser',
+        'listener_class_name': 'VestaCppListener'
+    },
     # '.cs': { ... },
     # '.sql': { ... },
     # '.json': { ... }
