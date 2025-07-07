@@ -2710,9 +2710,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
         try:
             self.enterOuterAlt(localctx, 1)
             self.state = 354
-            if not this.notOpenBraceAndNotFunction():
+            if not self.notOpenBraceAndNotFunction():
                 from antlr4.error.Errors import FailedPredicateException
-                raise FailedPredicateException(self, "this.notOpenBraceAndNotFunction()")
+                raise FailedPredicateException(self, "self.notOpenBraceAndNotFunction()")
             self.state = 355
             self.expressionSequence()
             self.state = 356
@@ -3324,9 +3324,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
             la_ = self._interp.adaptivePredict(self._input,37,self._ctx)
             if la_ == 1:
                 self.state = 430
-                if not this.notLineTerminator():
+                if not self.notLineTerminator():
                     from antlr4.error.Errors import FailedPredicateException
-                    raise FailedPredicateException(self, "this.notLineTerminator()")
+                    raise FailedPredicateException(self, "self.notLineTerminator()")
                 self.state = 431
                 self.identifier()
 
@@ -3393,9 +3393,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
             la_ = self._interp.adaptivePredict(self._input,38,self._ctx)
             if la_ == 1:
                 self.state = 437
-                if not this.notLineTerminator():
+                if not self.notLineTerminator():
                     from antlr4.error.Errors import FailedPredicateException
-                    raise FailedPredicateException(self, "this.notLineTerminator()")
+                    raise FailedPredicateException(self, "self.notLineTerminator()")
                 self.state = 438
                 self.identifier()
 
@@ -3462,9 +3462,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
             la_ = self._interp.adaptivePredict(self._input,39,self._ctx)
             if la_ == 1:
                 self.state = 444
-                if not this.notLineTerminator():
+                if not self.notLineTerminator():
                     from antlr4.error.Errors import FailedPredicateException
-                    raise FailedPredicateException(self, "this.notLineTerminator()")
+                    raise FailedPredicateException(self, "self.notLineTerminator()")
                 self.state = 445
                 self.expressionSequence()
 
@@ -3540,9 +3540,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
             la_ = self._interp.adaptivePredict(self._input,40,self._ctx)
             if la_ == 1:
                 self.state = 451
-                if not this.notLineTerminator():
+                if not self.notLineTerminator():
                     from antlr4.error.Errors import FailedPredicateException
-                    raise FailedPredicateException(self, "this.notLineTerminator()")
+                    raise FailedPredicateException(self, "self.notLineTerminator()")
                 self.state = 452
                 self.expressionSequence()
 
@@ -4086,9 +4086,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
             self.state = 501
             self.match(JavaScriptParser.Throw)
             self.state = 502
-            if not this.notLineTerminator():
+            if not self.notLineTerminator():
                 from antlr4.error.Errors import FailedPredicateException
-                raise FailedPredicateException(self, "this.notLineTerminator()")
+                raise FailedPredicateException(self, "self.notLineTerminator()")
             self.state = 503
             self.expressionSequence()
             self.state = 504
@@ -4693,9 +4693,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
 
                 elif la_ == 2:
                     self.state = 564
-                    if not this.n("static"):
+                    if not self.n("static"):
                         from antlr4.error.Errors import FailedPredicateException
-                        raise FailedPredicateException(self, "this.n(\"static\")")
+                        raise FailedPredicateException(self, "self.n(\"static\")")
                     self.state = 565
                     self.identifier()
 
@@ -4715,9 +4715,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
 
                 elif la_ == 2:
                     self.state = 570
-                    if not this.n("static"):
+                    if not self.n("static"):
                         from antlr4.error.Errors import FailedPredicateException
-                        raise FailedPredicateException(self, "this.n(\"static\")")
+                        raise FailedPredicateException(self, "self.n(\"static\")")
                     self.state = 571
                     self.identifier()
 
@@ -4738,9 +4738,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
 
                 elif la_ == 2:
                     self.state = 576
-                    if not this.n("static"):
+                    if not self.n("static"):
                         from antlr4.error.Errors import FailedPredicateException
-                        raise FailedPredicateException(self, "this.n(\"static\")")
+                        raise FailedPredicateException(self, "self.n(\"static\")")
                     self.state = 577
                     self.identifier()
                     pass
@@ -4843,9 +4843,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
                     self.state = 584
                     self.match(JavaScriptParser.Async)
                     self.state = 585
-                    if not this.notLineTerminator():
+                    if not self.notLineTerminator():
                         from antlr4.error.Errors import FailedPredicateException
-                        raise FailedPredicateException(self, "this.notLineTerminator()")
+                        raise FailedPredicateException(self, "self.notLineTerminator()")
 
 
                 self.state = 589
@@ -8348,9 +8348,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
                             from antlr4.error.Errors import FailedPredicateException
                             raise FailedPredicateException(self, "self.precpred(self._ctx, 39)")
                         self.state = 917
-                        if not this.notLineTerminator():
+                        if not self.notLineTerminator():
                             from antlr4.error.Errors import FailedPredicateException
-                            raise FailedPredicateException(self, "this.notLineTerminator()")
+                            raise FailedPredicateException(self, "self.notLineTerminator()")
                         self.state = 918
                         self.match(JavaScriptParser.PlusPlus)
                         pass
@@ -8363,9 +8363,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
                             from antlr4.error.Errors import FailedPredicateException
                             raise FailedPredicateException(self, "self.precpred(self._ctx, 38)")
                         self.state = 920
-                        if not this.notLineTerminator():
+                        if not self.notLineTerminator():
                             from antlr4.error.Errors import FailedPredicateException
-                            raise FailedPredicateException(self, "this.notLineTerminator()")
+                            raise FailedPredicateException(self, "self.notLineTerminator()")
                         self.state = 921
                         self.match(JavaScriptParser.MinusMinus)
                         pass
@@ -9478,9 +9478,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
         try:
             self.enterOuterAlt(localctx, 1)
             self.state = 1020
-            if not this.n("get"):
+            if not self.n("get"):
                 from antlr4.error.Errors import FailedPredicateException
-                raise FailedPredicateException(self, "this.n(\"get\")")
+                raise FailedPredicateException(self, "self.n(\"get\")")
             self.state = 1021
             self.identifier()
             self.state = 1022
@@ -9536,9 +9536,9 @@ class JavaScriptParser ( JavaScriptParserBase ):
         try:
             self.enterOuterAlt(localctx, 1)
             self.state = 1024
-            if not this.n("set"):
+            if not self.n("set"):
                 from antlr4.error.Errors import FailedPredicateException
-                raise FailedPredicateException(self, "this.n(\"set\")")
+                raise FailedPredicateException(self, "self.n(\"set\")")
             self.state = 1025
             self.identifier()
             self.state = 1026
@@ -10304,17 +10304,17 @@ class JavaScriptParser ( JavaScriptParserBase ):
             elif la_ == 3:
                 self.enterOuterAlt(localctx, 3)
                 self.state = 1093
-                if not this.lineTerminatorAhead():
+                if not self.lineTerminatorAhead():
                     from antlr4.error.Errors import FailedPredicateException
-                    raise FailedPredicateException(self, "this.lineTerminatorAhead()")
+                    raise FailedPredicateException(self, "self.lineTerminatorAhead()")
                 pass
 
             elif la_ == 4:
                 self.enterOuterAlt(localctx, 4)
                 self.state = 1094
-                if not this.closeBrace():
+                if not self.closeBrace():
                     from antlr4.error.Errors import FailedPredicateException
-                    raise FailedPredicateException(self, "this.closeBrace()")
+                    raise FailedPredicateException(self, "self.closeBrace()")
                 pass
 
 
@@ -10351,50 +10351,50 @@ class JavaScriptParser ( JavaScriptParserBase ):
 
     def expressionStatement_sempred(self, localctx:ExpressionStatementContext, predIndex:int):
             if predIndex == 0:
-                return this.notOpenBraceAndNotFunction()
+                return self.notOpenBraceAndNotFunction()
          
 
     def continueStatement_sempred(self, localctx:ContinueStatementContext, predIndex:int):
             if predIndex == 1:
-                return this.notLineTerminator()
+                return self.notLineTerminator()
          
 
     def breakStatement_sempred(self, localctx:BreakStatementContext, predIndex:int):
             if predIndex == 2:
-                return this.notLineTerminator()
+                return self.notLineTerminator()
          
 
     def returnStatement_sempred(self, localctx:ReturnStatementContext, predIndex:int):
             if predIndex == 3:
-                return this.notLineTerminator()
+                return self.notLineTerminator()
          
 
     def yieldStatement_sempred(self, localctx:YieldStatementContext, predIndex:int):
             if predIndex == 4:
-                return this.notLineTerminator()
+                return self.notLineTerminator()
          
 
     def throwStatement_sempred(self, localctx:ThrowStatementContext, predIndex:int):
             if predIndex == 5:
-                return this.notLineTerminator()
+                return self.notLineTerminator()
          
 
     def classElement_sempred(self, localctx:ClassElementContext, predIndex:int):
             if predIndex == 6:
-                return this.n("static")
+                return self.n("static")
          
 
             if predIndex == 7:
-                return this.n("static")
+                return self.n("static")
          
 
             if predIndex == 8:
-                return this.n("static")
+                return self.n("static")
          
 
     def methodDefinition_sempred(self, localctx:MethodDefinitionContext, predIndex:int):
             if predIndex == 9:
-                return this.notLineTerminator()
+                return self.notLineTerminator()
          
 
     def singleExpression_sempred(self, localctx:SingleExpressionContext, predIndex:int):
@@ -10487,7 +10487,7 @@ class JavaScriptParser ( JavaScriptParserBase ):
          
 
             if predIndex == 32:
-                return this.notLineTerminator()
+                return self.notLineTerminator()
          
 
             if predIndex == 33:
@@ -10495,7 +10495,7 @@ class JavaScriptParser ( JavaScriptParserBase ):
          
 
             if predIndex == 34:
-                return this.notLineTerminator()
+                return self.notLineTerminator()
          
 
             if predIndex == 35:
@@ -10504,21 +10504,21 @@ class JavaScriptParser ( JavaScriptParserBase ):
 
     def getter_sempred(self, localctx:GetterContext, predIndex:int):
             if predIndex == 36:
-                return this.n("get")
+                return self.n("get")
          
 
     def setter_sempred(self, localctx:SetterContext, predIndex:int):
             if predIndex == 37:
-                return this.n("set")
+                return self.n("set")
          
 
     def eos_sempred(self, localctx:EosContext, predIndex:int):
             if predIndex == 38:
-                return this.lineTerminatorAhead()
+                return self.lineTerminatorAhead()
          
 
             if predIndex == 39:
-                return this.closeBrace()
+                return self.closeBrace()
          
 
 

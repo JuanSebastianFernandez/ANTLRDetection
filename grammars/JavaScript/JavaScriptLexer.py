@@ -909,27 +909,27 @@ class JavaScriptLexer(JavaScriptLexerBase):
 
     def OpenBrace_action(self, localctx:RuleContext , actionIndex:int):
         if actionIndex == 0:
-            this.ProcessOpenBrace();
+            self.ProcessOpenBrace();
      
 
     def TemplateCloseBrace_action(self, localctx:RuleContext , actionIndex:int):
         if actionIndex == 1:
-            this.ProcessTemplateCloseBrace();
+            self.ProcessTemplateCloseBrace();
      
 
     def CloseBrace_action(self, localctx:RuleContext , actionIndex:int):
         if actionIndex == 2:
-            this.ProcessCloseBrace();
+            self.ProcessCloseBrace();
      
 
     def StringLiteral_action(self, localctx:RuleContext , actionIndex:int):
         if actionIndex == 3:
-            this.ProcessStringLiteral();
+            self.ProcessStringLiteral();
      
 
     def TemplateStringStartExpression_action(self, localctx:RuleContext , actionIndex:int):
         if actionIndex == 4:
-            this.ProcessTemplateOpenBrace();
+            self.ProcessTemplateOpenBrace();
      
 
     def sempred(self, localctx:RuleContext, ruleIndex:int, predIndex:int):
@@ -957,67 +957,67 @@ class JavaScriptLexer(JavaScriptLexerBase):
 
     def HashBangLine_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 0:
-                return  this.IsStartOfFile()
+                return  self.IsStartOfFile()
          
 
     def RegularExpressionLiteral_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 1:
-                return this.IsRegexPossible()
+                return self.IsRegexPossible()
          
 
     def TemplateCloseBrace_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 2:
-                return this.IsInTemplateString()
+                return self.IsInTemplateString()
          
 
     def OctalIntegerLiteral_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 3:
-                return !this.IsStrictMode()
+                return not self.IsStrictMode()
          
 
     def Implements_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 4:
-                return this.IsStrictMode()
+                return self.IsStrictMode()
          
 
     def StrictLet_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 5:
-                return this.IsStrictMode()
+                return self.IsStrictMode()
          
 
     def NonStrictLet_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 6:
-                return !this.IsStrictMode()
+                return not self.IsStrictMode()
          
 
     def Private_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 7:
-                return this.IsStrictMode()
+                return self.IsStrictMode()
          
 
     def Public_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 8:
-                return this.IsStrictMode()
+                return self.IsStrictMode()
          
 
     def Interface_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 9:
-                return this.IsStrictMode()
+                return self.IsStrictMode()
          
 
     def Package_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 10:
-                return this.IsStrictMode()
+                return self.IsStrictMode()
          
 
     def Protected_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 11:
-                return this.IsStrictMode()
+                return self.IsStrictMode()
          
 
     def Static_sempred(self, localctx:RuleContext, predIndex:int):
             if predIndex == 12:
-                return this.IsStrictMode()
+                return self.IsStrictMode()
          
 
 

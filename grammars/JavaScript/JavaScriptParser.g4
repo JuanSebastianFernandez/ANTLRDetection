@@ -166,7 +166,7 @@ emptyStatement_
     ;
 
 expressionStatement
-    : {this.notOpenBraceAndNotFunction()}? expressionSequence eos
+    : {self.notOpenBraceAndNotFunction()}? expressionSequence eos
     ;
 
 ifStatement
@@ -188,19 +188,19 @@ varModifier // let, const - ECMAScript 6
     ;
 
 continueStatement
-    : Continue ({this.notLineTerminator()}? identifier)? eos
+    : Continue ({self.notLineTerminator()}? identifier)? eos
     ;
 
 breakStatement
-    : Break ({this.notLineTerminator()}? identifier)? eos
+    : Break ({self.notLineTerminator()}? identifier)? eos
     ;
 
 returnStatement
-    : Return ({this.notLineTerminator()}? expressionSequence)? eos
+    : Return ({self.notLineTerminator()}? expressionSequence)? eos
     ;
 
 yieldStatement
-    : (Yield | YieldStar) ({this.notLineTerminator()}? expressionSequence)? eos
+    : (Yield | YieldStar) ({self.notLineTerminator()}? expressionSequence)? eos
     ;
 
 withStatement
@@ -232,7 +232,7 @@ labelledStatement
     ;
 
 throwStatement
-    : Throw {this.notLineTerminator()}? expressionSequence eos
+    : Throw {self.notLineTerminator()}? expressionSequence eos
     ;
 
 tryStatement
@@ -264,14 +264,14 @@ classTail
     ;
 
 classElement
-    : (Static | {this.n("static")}? identifier)? methodDefinition
-    | (Static | {this.n("static")}? identifier)? fieldDefinition
-    | (Static | {this.n("static")}? identifier) block
+    : (Static | {self.n("static")}? identifier)? methodDefinition
+    | (Static | {self.n("static")}? identifier)? fieldDefinition
+    | (Static | {self.n("static")}? identifier) block
     | emptyStatement_
     ;
 
 methodDefinition
-    : (Async {this.notLineTerminator()}?)? '*'? classElementName '(' formalParameterList? ')' functionBody
+    : (Async {self.notLineTerminator()}?)? '*'? classElementName '(' formalParameterList? ')' functionBody
     | '*'? getter '(' ')' functionBody
     | '*'? setter '(' formalParameterList? ')' functionBody
     ;
@@ -363,8 +363,8 @@ singleExpression
     | New singleExpression                                                 # NewExpression
     | singleExpression arguments                                           # ArgumentsExpression
     | New '.' identifier                                                   # MetaExpression // new.target
-    | singleExpression {this.notLineTerminator()}? '++'                    # PostIncrementExpression
-    | singleExpression {this.notLineTerminator()}? '--'                    # PostDecreaseExpression
+    | singleExpression {self.notLineTerminator()}? '++'                    # PostIncrementExpression
+    | singleExpression {self.notLineTerminator()}? '--'                    # PostDecreaseExpression
     | Delete singleExpression                                              # DeleteExpression
     | Void singleExpression                                                # VoidExpression
     | Typeof singleExpression                                              # TypeofExpression
@@ -488,11 +488,11 @@ bigintLiteral
     ;
 
 getter
-    : {this.n("get")}? identifier classElementName
+    : {self.n("get")}? identifier classElementName
     ;
 
 setter
-    : {this.n("set")}? identifier classElementName
+    : {self.n("set")}? identifier classElementName
     ;
 
 identifierName
@@ -575,6 +575,6 @@ let_
 eos
     : SemiColon
     | EOF
-    | {this.lineTerminatorAhead()}?
-    | {this.closeBrace()}?
+    | {self.lineTerminatorAhead()}?
+    | {self.closeBrace()}?
     ;

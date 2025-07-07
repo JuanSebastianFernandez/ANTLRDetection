@@ -1,5 +1,3 @@
-# api/code_analyzer/main.py
-
 import os
 import json
 from handleListeners.HandleListeners import AntlrListenerHandler
@@ -16,7 +14,7 @@ UNSUPPORTED_FILE = os.path.join(ROOT_DIR_FOR_TESTS, 'unsupported.xyz') # Archivo
 MALFORMED_PYTHON_FILE = os.path.join(ROOT_DIR_FOR_TESTS, 'Python', 'malformed_sample.py') # Archivo para probar errores de parsing
 C_SAMPLE_FILE = os.path.join(ROOT_DIR_FOR_TESTS, 'C', 'vulnerable_sample.c') # Archivo de prueba C
 CPP_SAMPLE_FILE = os.path.join(ROOT_DIR_FOR_TESTS, 'Cpp', 'vulnerable_sample.cpp') # Archivo de prueba C++
-
+JS_SAMPLE_FILE = os.path.join(ROOT_DIR_FOR_TESTS, 'JavaScript', 'vulnerable_sample.js') # Archivo de prueba JavaScript
 
 def run_analysis_tests():
     handler = AntlrListenerHandler()
@@ -28,7 +26,8 @@ def run_analysis_tests():
         # UNSUPPORTED_FILE,
         # MALFORMED_PYTHON_FILE,
         # C_SAMPLE_FILE
-        CPP_SAMPLE_FILE
+        # CPP_SAMPLE_FILE
+        JS_SAMPLE_FILE
     ]
 
     for file_path in reports_to_run:

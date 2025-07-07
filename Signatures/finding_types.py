@@ -206,3 +206,44 @@ class CppSignatures(BaseSignatures):
         "SUSPICIOUS_OVERRIDE": {"type": FINDING_TYPE_OBFUSCATION_TECHNIQUE, "severity": "MEDIUM", "desc": "Método sobreescrito con cuerpo vacío o muy simple, posible técnica de evasión."},
         "SIMPLE_FUNCTION_BODY": {"type": FINDING_TYPE_OBFUSCATION_TECHNIQUE, "severity": "MEDIUM", "desc": "Función con cuerpo muy simple o vacío, posible técnica de evasión o placeholder."}
     }
+
+class JavaScriptSignatures(BaseSignatures):
+    """
+    Define las firmas de seguridad específicas para el lenguaje JavaScript.
+    """
+    IMPORTS = { # En JS, los "imports" son módulos, no cabeceras.
+        "fs": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "INFO", "desc": "Importación del módulo 'fs' (manipulación de archivos)."},
+        "child_process": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "MEDIUM", "desc": "Importación del módulo 'child_process' (ejecución de comandos)."},
+        "net": {"type": FINDING_TYPE_NETWORK_COMMUNICATION, "severity": "MEDIUM", "desc": "Importación del módulo 'net' (red de bajo nivel)."},
+        "http": {"type": FINDING_TYPE_NETWORK_COMMUNICATION, "severity": "MEDIUM", "desc": "Importación del módulo 'http' (peticiones HTTP)."},
+        "https": {"type": FINDING_TYPE_NETWORK_COMMUNICATION, "severity": "MEDIUM", "desc": "Importación del módulo 'https' (peticiones HTTPS)."},
+        "crypto": {"type": FINDING_TYPE_CRYPTOGRAPHIC_USE, "severity": "HIGH", "desc": "Importación del módulo 'crypto' (criptografía)."},
+        "path": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "INFO", "desc": "Importación del módulo 'path' (manipulación de rutas de archivos)."},
+        "url": {"type": FINDING_TYPE_NETWORK_COMMUNICATION, "severity": "INFO", "desc": "Importación del módulo 'url' (parsing de URLs)."}
+    }
+
+    METHOD_CALLS = {
+        "eval(": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "CRITICAL", "desc": "Ejecución de código dinámico a partir de un string."},
+        "setTimeout": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "LOW", "desc": "Uso de setTimeout con string (evaluación de código)."},
+        "setInterval": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "LOW", "desc": "Uso de setInterval con string (evaluación de código)."},
+        "new Function(": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "CRITICAL", "desc": "Creación de funciones dinámicas a partir de un string."},
+        "document.write": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "MEDIUM", "desc": "Escritura directa en el documento HTML (riesgo de XSS)."},
+        "element.innerHTML": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "MEDIUM", "desc": "Asignación a innerHTML (riesgo de XSS)."},
+        "fs.readFileSync": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "MEDIUM", "desc": "Lectura síncrona de archivos."},
+        "fs.writeFileSync": {"type": FINDING_TYPE_FILE_SYSTEM_ACCESS, "severity": "HIGH", "desc": "Escritura síncrona de archivos."},
+        "child_process.exec": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "CRITICAL", "desc": "Ejecución de comandos del sistema."},
+        "require(": {"type": FINDING_TYPE_CODE_EXECUTION, "severity": "MEDIUM", "desc": "Importación dinámica de módulos (potencial para cargar malware)."}, # Para Node.js
+        "atob(": {"type": FINDING_TYPE_OBFUSCATION_TECHNIQUE, "severity": "LOW", "desc": "Uso de atob (decodificación Base64, común en ofuscación)."},
+        "btoa(": {"type": FINDING_TYPE_OBFUSCATION_TECHNIQUE, "severity": "LOW", "desc": "Uso de btoa (codificación Base64, común en ofuscación)."}
+    }
+
+    STRING_KEYWORDS = BaseSignatures.STRING_KEYWORDS # Reutilizar
+
+    NAMING_CONVENTIONS = BaseSignatures.NAMING_CONVENTIONS # Reutilizar
+
+    STRUCTURAL_PATTERNS = {
+        "SENSITIVE_PATH_ACCESS": {"type": FINDING_TYPE_SENSITIVE_DATA_ACCESS, "severity": "MEDIUM", "desc": "Acceso a rutas sensibles del sistema (ej. /etc/passwd, C:\\Windows)."},
+        "SELF_AWARE_CODE_PATH": {"type": FINDING_TYPE_SELF_AWARE_BEHAVIOR, "severity": "HIGH", "desc": "El código intenta acceder a su propia ruta de ejecución (ej. __dirname, process.argv[0])."},
+        "EMPTY_CATCH_BLOCK": {"type": FINDING_TYPE_IMPROPER_ERROR_HANDLING, "severity": "MEDIUM", "desc": "Bloque catch vacío que puede ocultar errores críticos."},
+        "SUSPICIOUS_OVERRIDE": {"type": FINDING_TYPE_OBFUSCATION_TECHNIQUE, "severity": "MEDIUM", "desc": "Método sobreescrito con cuerpo vacío o muy simple, posible técnica de evasión."}
+    }

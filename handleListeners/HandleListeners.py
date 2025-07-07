@@ -1,5 +1,3 @@
-# api/code_analyzer/HandleListeners/HandleListeners.py
-
 import os
 from antlr4 import FileStream, CommonTokenStream, ParseTreeWalker, InputStream
 from antlr4.error.ErrorListener import ErrorListener
@@ -70,9 +68,15 @@ LANGUAGE_CONFIGS_MAP = {
         'parser_class_name': 'CPP14Parser',
         'listener_class_name': 'VestaCppListener'
     },
-    # '.cs': { ... },
-    # '.sql': { ... },
-    # '.json': { ... }
+    '.js': {
+        'lexer_module': 'grammars.JavaScript.JavaScriptLexer',
+        'parser_module': 'grammars.JavaScript.JavaScriptParser',
+        'listener_module': 'listeners.VestaJavaScriptListener',
+        'start_rule': 'program',
+        'lexer_class_name': 'JavaScriptLexer',
+        'parser_class_name': 'JavaScriptParser',
+        'listener_class_name': 'VestaJavaScriptListener'
+    }
 }
 
 

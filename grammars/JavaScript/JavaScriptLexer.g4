@@ -45,21 +45,21 @@ options {
 
 // Insert here @header for C++ lexer.
 
-HashBangLine      :                           { this.IsStartOfFile()}? '#!' ~[\r\n\u2028\u2029]*; // only allowed at start
+HashBangLine      :                           { self.IsStartOfFile()}? '#!' ~[\r\n\u2028\u2029]*; // only allowed at start
 MultiLineComment  : '/*' .*? '*/'             -> channel(HIDDEN);
 SingleLineComment : '//' ~[\r\n\u2028\u2029]* -> channel(HIDDEN);
 RegularExpressionLiteral:
-    '/' RegularExpressionFirstChar RegularExpressionChar* {this.IsRegexPossible()}? '/' IdentifierPart*
+    '/' RegularExpressionFirstChar RegularExpressionChar* {self.IsRegexPossible()}? '/' IdentifierPart*
 ;
 
 OpenBracket                : '[';
 CloseBracket               : ']';
 OpenParen                  : '(';
 CloseParen                 : ')';
-OpenBrace                  : '{' {this.ProcessOpenBrace();};
-TemplateCloseBrace         :     {this.IsInTemplateString()}? '}' // Break lines here to ensure proper transformation by Go/transformGrammar.py
-                                                                  {this.ProcessTemplateCloseBrace();} -> popMode;
-CloseBrace                 : '}' {this.ProcessCloseBrace();};
+OpenBrace                  : '{' {self.ProcessOpenBrace();};
+TemplateCloseBrace         :     {self.IsInTemplateString()}? '}' // Break lines here to ensure proper transformation by Go/transformGrammar.py
+                                                                  {self.ProcessTemplateCloseBrace();} -> popMode;
+CloseBrace                 : '}' {self.ProcessCloseBrace();};
 SemiColon                  : ';';
 Comma                      : ',';
 Assign                     : '=';
@@ -130,7 +130,7 @@ DecimalLiteral:
 /// Numeric Literals
 
 HexIntegerLiteral    : '0' [xX] [0-9a-fA-F] HexDigit*;
-OctalIntegerLiteral  : '0' [0-7]+ {!this.IsStrictMode()}?;
+OctalIntegerLiteral  : '0' [0-7]+ {not self.IsStrictMode()}?;
 OctalIntegerLiteral2 : '0' [oO] [0-7] [_0-7]*;
 BinaryIntegerLiteral : '0' [bB] [01] [_01]*;
 
@@ -189,22 +189,22 @@ Await : 'await';
 /// The following tokens are also considered to be FutureReservedWords
 /// when parsing strict mode
 
-Implements   : 'implements' {this.IsStrictMode()}?;
-StrictLet    : 'let'        {this.IsStrictMode()}?;
-NonStrictLet : 'let'        {!this.IsStrictMode()}?;
-Private      : 'private'    {this.IsStrictMode()}?;
-Public       : 'public'     {this.IsStrictMode()}?;
-Interface    : 'interface'  {this.IsStrictMode()}?;
-Package      : 'package'    {this.IsStrictMode()}?;
-Protected    : 'protected'  {this.IsStrictMode()}?;
-Static       : 'static'     {this.IsStrictMode()}?;
+Implements   : 'implements' {self.IsStrictMode()}?;
+StrictLet    : 'let'        {self.IsStrictMode()}?;
+NonStrictLet : 'let'        {not self.IsStrictMode()}?;
+Private      : 'private'    {self.IsStrictMode()}?;
+Public       : 'public'     {self.IsStrictMode()}?;
+Interface    : 'interface'  {self.IsStrictMode()}?;
+Package      : 'package'    {self.IsStrictMode()}?;
+Protected    : 'protected'  {self.IsStrictMode()}?;
+Static       : 'static'     {self.IsStrictMode()}?;
 
 /// Identifier Names and Identifiers
 
 Identifier: IdentifierStart IdentifierPart*;
 /// String Literals
 StringLiteral:
-    ('"' DoubleStringCharacter* '"' | '\'' SingleStringCharacter* '\'') {this.ProcessStringLiteral();}
+    ('"' DoubleStringCharacter* '"' | '\'' SingleStringCharacter* '\'') {self.ProcessStringLiteral();}
 ;
 
 BackTick: '`' -> pushMode(TEMPLATE);
@@ -222,7 +222,7 @@ UnexpectedCharacter : .                     -> channel(ERROR);
 mode TEMPLATE;
 
 BackTickInside                : '`' -> type(BackTick), popMode;
-TemplateStringStartExpression : '${' {this.ProcessTemplateOpenBrace();} -> pushMode(DEFAULT_MODE);
+TemplateStringStartExpression : '${' {self.ProcessTemplateOpenBrace();} -> pushMode(DEFAULT_MODE);
 TemplateStringAtom            : ~[`];
 
 // Fragment rules
