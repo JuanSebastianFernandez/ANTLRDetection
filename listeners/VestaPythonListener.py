@@ -1,62 +1,95 @@
 import re
 import numpy as np
 from antlr4 import CommonTokenStream, ParserRuleContext
-from antlr4.tree.Tree import TerminalNode # Importar TerminalNode
-from grammars.Python.PythonLexer import PythonLexer # Lexer para acceder a los tipos de token (ej. PythonLexer.NAME)
-from grammars.Python.PythonParser import PythonParser # Parser para los tipos de contexto (ej. PythonParser.Class_defContext)
-from grammars.Python.PythonParserListener import PythonParserListener # La clase base de la que heredamos
+from antlr4.tree.Tree import TerminalNode 
+from grammars.Python.PythonLexer import PythonLexer 
+from grammars.Python.PythonParser import PythonParser 
+from grammars.Python.PythonParserListener import PythonParserListener 
 from signatures.finding_types import PythonSignatures, SENSITIVE_PATH_REGEX_GLOBAL
 
 
-# --- Función de Entropía (se mantiene igual) ---
 def calculate_entropy(data: bytes) -> float:
-    if not data: return 0.0
-    occurences = np.bincount(np.frombuffer(data, dtype=np.uint8), minlength=256)
-    probabilities = occurences / len(data)
+    """
+    Calculate the Shannon entropy of a byte sequence.
+
+    Args:
+        data (bytes): Input byte sequence to analyze.
+
+    Returns:
+        float: Calculated entropy value. Returns 0.0 for empty input.
+    """
+    if not data:
+        return 0.0
+    occurrences = np.bincount(np.frombuffer(data, dtype=np.uint8), minlength=256)
+    probabilities = occurrences / len(data)
     entropy = -np.sum([p * np.log2(p) for p in probabilities if p > 0])
     return entropy
 
 
 class VestaPythonListener(PythonParserListener):
     """
-    Listener ANTLR4 diseñado para extraer un informe enriquecido del código fuente de Python,
-    adaptado a la estructura de los parsers y lexers proporcionados.
+    ANTLR4-based listener designed to extract an enriched report from Python source code,
+    adapted to the structure of the provided parsers and lexers.
     """
     def __init__(self, token_stream: CommonTokenStream):
-        self.token_stream = token_stream
-        self.static_findings = []
-        self.python_signatures = PythonSignatures()
-        self.function_entropies = []
-        self.function_sizes = []
-        self.string_entropies = []
-        self.import_count = 0
-        self.class_and_function_count = 0
-        self.has_main_entry_point = 0
-        self._finding_ids = set()
+        """
+        Initializes the VestaPythonListener with a token stream.
 
-    def add_finding(self, finding: dict):
-        # Usamos una tupla para comprobar la unicidad del hallazgo
+        Args:
+            token_stream (CommonTokenStream): The token stream from the parser.
+        """
+        self.token_stream: CommonTokenStream = token_stream
+        self.static_findings: list[dict] = []
+        self.python_signatures: PythonSignatures = PythonSignatures()
+        self.function_entropies: list[float] = []
+        self.function_sizes: list[int] = []
+        self.string_entropies: list[float] = []
+        self.import_count: int = 0
+        self.class_and_function_count: int = 0
+        self.has_main_entry_point: int = 0
+        self._finding_ids: set[tuple] = set()
+
+    def add_finding(self, finding: dict) -> None:
+        """
+        Adds a new finding to the result list, avoiding duplicates.
+
+        Args:
+            finding (dict): Finding dictionary with keys 'finding_type', 'line', etc.
+        """
+        # Using a tuple to check for finding uniqueness
         finding_id = (finding['finding_type'], finding['line'], finding['description'])
         if finding_id not in self._finding_ids:
             self.static_findings.append(finding)
             self._finding_ids.add(finding_id)
 
+    def enterImport_stmt(self, ctx: PythonParser.Import_stmtContext) -> None:
+        """
+        Triggered upon entering an import statement.
+        Detects suspicious imports based on predefined patterns.
 
-    def enterImport_stmt(self, ctx: PythonParser.Import_stmtContext):
+        Args:
+            ctx (PythonParser.Import_stmtContext): Parsing context.
+        """
         self.import_count += 1
         import_text = self.token_stream.getText(ctx.start.tokenIndex, ctx.stop.tokenIndex)
         for pattern, details in self.python_signatures.IMPORTS.items():
-            # re.escape para patrones con puntos (ej. os.path)
+            # Use re.escape for patterns with dots (e.g., os.path)
             if re.search(r'\b' + re.escape(pattern) + r'\b', import_text): 
                 self.add_finding({
                     "finding_type": details["type"],
-                    "description": f"Import sospechoso detectado: '{pattern}'. Indica: {details['desc']}",
+                    "description": f"Suspicious import detected: '{pattern}'. Indicates: {details['desc']}",
                     "line": ctx.start.line, 
                     "severity": details["severity"]
                 })
 
+    def enterClass_def_raw(self, ctx: PythonParser.Class_def_rawContext) -> None:
+        """
+        Triggered upon entering a class definition.
+        Detects suspicious or obfuscated class names.
 
-    def enterClass_def_raw(self, ctx: PythonParser.Class_def_rawContext):
+        Args:
+            ctx (PythonParser.Class_def_rawContext): Parsing context.
+        """
         self.class_and_function_count += 1
         class_name = None
         name_ctx = ctx.name()
@@ -69,84 +102,102 @@ class VestaPythonListener(PythonParserListener):
             if len(class_name) <= 2:
                 self.add_finding({
                     "finding_type": details["type"],
-                    "description": f"Nombre de clase sospechosamente corto: '{class_name}'",
+                    "description": f"Suspiciously short class name: '{class_name}'",
                     "line": ctx.start.line, 
                     "severity": details["severity"]
                 })
         else:
             self.add_finding({
                 "finding_type": details["type"], 
-                "description": "Clase con nombre no identificable, sin nombre o estructura inesperada (posible ofuscación).",
+                "description": "Class with an unidentifiable name, no name, or unexpected structure (possible obfuscation).",
                 "line": ctx.start.line, 
                 "severity": details["severity"]
             })
 
-    def exitFunction_def_raw(self, ctx: PythonParser.Function_def_rawContext):
+    def exitFunction_def_raw(self, ctx: PythonParser.Function_def_rawContext) -> None:
+        """
+        Triggered after a function definition has been fully parsed.
+        Detects suspicious naming, minimal function bodies, and calculates entropy.
+
+        Args:
+            ctx (PythonParser.Function_def_rawContext): Parsing context.
+        """
         self.class_and_function_count += 1
         function_name = None
         name_ctx = ctx.name()
         if name_ctx:
             function_name = name_ctx.getText()
-            # print(f"Function name detected: {function_name}")  # Debugging
 
         details = self.python_signatures.NAMING_CONVENTIONS["OBFUSCATED_METHOD_SHORT_NAME"]
         if function_name:
             if len(function_name) <= 2:
                 self.add_finding({
                     "finding_type": details["type"],
-                    "description": f"Nombre de función sospechosamente corto: '{function_name}()'",
+                    "description": f"Suspiciously short function name: '{function_name}()'",
                     "line": ctx.start.line, 
                     "severity": details["severity"]
                 })
-            # --- Detección: Polimorfismo y override sospechoso (adaptado para Python) ---
-            # Un cuerpo de función que solo contiene 'pass' o es muy simple
-            # La regla 'block' contiene una lista de 'statement'
-            if ctx.block() and ctx.block().statements(): # Verifica que el bloque y statements existan
+            # --- Detection: Suspicious polymorphism and override (adapted for Python) ---
+            # A function body that only contains 'pass' or is very simple
+            # The 'block' rule contains a list of 'statement'
+            if ctx.block() and ctx.block().statements(): # Check that the block and statements exist
                 statements = ctx.block().statements().statement()
-                # print(f"Statements in function '{function_name}': {statements}")  # Debugging
                 if self._detected_pass_in_statements(statements):
-                    # Si hay un único statement 'pass', lo consideramos sospechoso
+                    # If there's a single 'pass' statement, it's considered suspicious
                     details = self.python_signatures.STRUCTURAL_PATTERNS["SUSPICIOUS_PASS_BODY"]
                     self.add_finding({
                         "finding_type": details["type"], 
-                        "description": f"Función '{function_name}' con unico cuerpo 'pass', posible evasión o técnica de ofuscación.",
+                        "description": f"Function '{function_name}' has a single 'pass' body, possibly an evasion or obfuscation technique.",
                         "line": ctx.start.line, 
                         "severity": details["severity"]
                         })
         else:
             self.add_finding({
                 "finding_type": details["type"], 
-                "description": "Función con nombre no identificable o estructura inesperada (posible ofuscación).",
+                "description": "Function with an unidentifiable name or unexpected structure (possible obfuscation).",
                 "line": ctx.start.line, 
                 "severity": details["severity"]
             })
 
-        # Obtener el texto original de la función completa para entropía y tamaño
+        # Get the full function text for entropy and size calculation
         start_index = ctx.start.tokenIndex
         stop_index = ctx.stop.tokenIndex
         function_text = self.token_stream.getText(start_index, stop_index)
         self.function_entropies.append(calculate_entropy(function_text.encode('utf-8')))
         self.function_sizes.append(len(function_text))
 
-    # Regla: strings (que agrupa tokens STRING y FSTRING)
-    def enterStrings(self, ctx: PythonParser.StringsContext):
+    def enterStrings(self, ctx: PythonParser.StringsContext) -> None:
+        """
+        Triggered when a string literal (including f-strings) is encountered.
+        Detects secrets, entropy in strings, and sensitive path access.
+
+        Args:
+            ctx (PythonParser.StringsContext): Parsing context.
+        """
         full_string_content = ""
         for child in ctx.children:
             if type(child).__name__ == "FstringContext":
-                # Para f-strings, obtenemos el texto completo del fstring.
+                # For f-strings, get the full text of the f-string.
                 full_string_content += self.token_stream.getText(child.start.tokenIndex, child.stop.tokenIndex)
             elif type(child).__name__ == "StringContext":
-                # Para strings normales, usamos getText() y luego eval para desquote.
-                full_string_content += eval(child.getText())
-        # print(f"Full string content: {full_string_content}")  # Debugging
+                # For normal strings, use getText() and then eval to unquote.
+                # This handles different string types like '...', "...", '''...''', """..."""
+                # and also escapes within the string.
+                try:
+                    full_string_content += eval(child.getText())
+                except (SyntaxError, ValueError) as e:
+                    # Handle cases where eval might fail (e.g., malformed strings)
+                    # For now, just append raw text if eval fails.
+                    full_string_content += child.getText().strip("'\"")
+
         if full_string_content:
             self.string_entropies.append(calculate_entropy(full_string_content.encode('utf-8')))
-            # Búsqueda de secretos y rutas sensibles
+            # Search for secrets and sensitive paths
             if SENSITIVE_PATH_REGEX_GLOBAL.search(full_string_content):
                 details = self.python_signatures.STRUCTURAL_PATTERNS["SENSITIVE_PATH_ACCESS"]
                 self.add_finding({
                     "finding_type": details["type"],
-                    "description": f"El código contiene un string que parece una ruta a un archivo/directorio ({full_string_content}) sensible del sistema.",
+                    "description": f"Code contains a string that appears to be a sensitive system file/directory path: '{full_string_content}'.",
                     "line": ctx.start.line, 
                     "severity": details["severity"]
                 })
@@ -155,23 +206,28 @@ class VestaPythonListener(PythonParserListener):
                 if re.search(keyword, full_string_content, re.IGNORECASE):
                     self.add_finding({
                         "finding_type": details["type"],
-                        "description": f"Posible secreto/credencial encontrado en un string literal que contiene '{keyword}'",
+                        "description": f"Possible secret/credential found in a string literal containing '{keyword}'",
                         "line": ctx.start.line, 
                         "severity": details["severity"]
                     })
     
-    # Regla: simple_stmt (una sentencia simple)
-    def enterSimple_stmt(self, ctx: PythonParser.Simple_stmtContext):
+    def enterSimple_stmt(self, ctx: PythonParser.Simple_stmtContext) -> None:
+        """
+        Triggered upon entering a simple statement.
+        Detects use of potentially dangerous method calls and self-modification patterns.
+
+        Args:
+            ctx (PythonParser.Simple_stmtContext): Parsing context.
+        """
         statement_text = self.token_stream.getText(ctx.start.tokenIndex, ctx.stop.tokenIndex)
-        # print(f"Simple statement text: {statement_text}")  # Debugging
         for pattern, details in self.python_signatures.METHOD_CALLS.items():
             if pattern in statement_text:
-                # print(f"Pattern found in simple statement: {pattern}")  # Debugging
-                if pattern == "subprocess.run" and "shell=True" not in statement_text: # Evitar falsos positivos
+                # Avoid false positives for subprocess.run if shell=True is not used
+                if pattern == "subprocess.run" and "shell=True" not in statement_text: 
                     continue 
                 self.add_finding({
                     "finding_type": details["type"],
-                    "description": f"Uso detectado de una llamada/patrón potencialmente peligroso: '{pattern}'",
+                    "description": f"Use of a potentially dangerous call/pattern detected: '{pattern}'",
                     "line": ctx.start.line, 
                     "severity": details["severity"]
                 })
@@ -180,55 +236,77 @@ class VestaPythonListener(PythonParserListener):
             
         for pattern in patterns_self_modification:
             if pattern in statement_text:
-                # print(f"Self-aware code pattern found: {pattern}")  # Debugging
-                # Si se encuentra un patrón de auto-modificación, se agrega un hallazgo
+                # If a self-modification pattern is found, add a finding
                 details = self.python_signatures.STRUCTURAL_PATTERNS["SELF_AWARE_CODE_PATH"]
                 self.add_finding({
                     "finding_type": details["type"],
-                    "description": f"El código intenta acceder a su propia ruta de ejecución mediante: {pattern} (posible preludio a auto-modificación/cifrado).",
+                    "description": f"Code attempts to access its own execution path using: {pattern} (possible prelude to self-modification/encryption).",
                     "line": ctx.start.line, 
                     "severity": details["severity"]
                 })
             
-    # Regla: if_stmt
-    def enterIf_stmt(self, ctx: PythonParser.If_stmtContext):
-        # La condición del 'if' está en ctx.named_expression() que a su vez contiene la 'expression'
+    def enterIf_stmt(self, ctx: PythonParser.If_stmtContext) -> None:
+        """
+        Triggered upon entering an if statement.
+        Detects the presence of a main entry point ('if __name__ == "__main__"').
+
+        Args:
+            ctx (PythonParser.If_stmtContext): Parsing context.
+        """
+        # The 'if' condition is in ctx.named_expression() which in turn contains the 'expression'
         condition_text = self.token_stream.getText(ctx.named_expression().start.tokenIndex, ctx.named_expression().stop.tokenIndex)
-        # print(f"Condition text in if statement: {condition_text}")  # Debugging
         if "__name__" in condition_text and ("'__main__'" in condition_text or '"__main__"' in condition_text):
             self.has_main_entry_point = 1
 
-    # Regla: except_block
-    def enterExcept_block(self, ctx: PythonParser.Except_blockContext):
+    def enterExcept_block(self, ctx: PythonParser.Except_blockContext) -> None:
+        """
+        Triggered upon entering an except block.
+        Detects empty except blocks, which may hide critical security issues.
+
+        Args:
+            ctx (PythonParser.Except_blockContext): Parsing context.
+        """
         if ctx.block() and ctx.block().statements():
             statements = ctx.block().statements().statement()
-            # Verificamos si hay un único statement 'pass' en el bloque except
+            # Check if there is a single 'pass' statement in the except block
             if self._detected_pass_in_statements(statements):
                 details = self.python_signatures.STRUCTURAL_PATTERNS["EMPTY_EXCEPT_BLOCK"]
                 self.add_finding({
                     "finding_type": details["type"],
-                    "description": "Bloque 'except' vacío o con cuerpo 'pass', puede ocultar errores críticos.",
+                    "description": "Empty 'except' block or with a 'pass' body, which can hide critical errors.",
                     "line": ctx.start.line, 
                     "severity": details["severity"]
                 })
 
-    def _detected_pass_in_statements(self, statements: list):
+    def _detected_pass_in_statements(self, statements: list[ParserRuleContext]) -> bool:
         """
-        Verifica si hay un único statement 'pass' en una lista de statements.
+        Checks if there is a single 'pass' statement in a list of statements.
+
+        Args:
+            statements (list[ParserRuleContext]): A list of statement contexts.
+
+        Returns:
+            bool: True if a single 'pass' statement is found, False otherwise.
         """
         if len(statements) == 1:
             stmt_text = self.token_stream.getText(statements[0].start.tokenIndex, statements[0].stop.tokenIndex)
-            stmt_text = stmt_text.splitlines() # Aseguramos que el texto se maneje correctamente
-            stmt_text = [line.strip() for line in stmt_text if line.strip() and  not line.startswith("#")]  # Limpiar líneas vacías y de comentarios subsecuentes lineas abajo
-            # print(f"Checking statement text: {stmt_text}, len: {len(stmt_text)}")  # Debugging
-            if len(stmt_text) == 1 and stmt_text[0].startswith('pass'):
+            stmt_text_lines = stmt_text.splitlines() # Ensure text is handled correctly
+            # Clean up empty lines and comment lines
+            cleaned_stmt_text = [line.strip() for line in stmt_text_lines if line.strip() and not line.strip().startswith("#")]
+            
+            if len(cleaned_stmt_text) == 1 and cleaned_stmt_text[0].startswith('pass'):
                 return True
+        return False
 
-
-
-
-    # --- Método Final para Obtener las Características Calculadas (se mantiene igual) ---
     def get_analysis_report(self) -> dict:
+        """
+        Generates a final analysis report including statistical features and detected findings.
+
+        Returns:
+            dict: A dictionary containing:
+                - 'feature_vector': Feature values useful for ML models or heuristics.
+                - 'static_findings': List of detected static issues in the code.
+        """
         sections_max_entropy = np.max(self.function_entropies) if self.function_entropies else 0.0
         sections_min_entropy = np.min(self.function_entropies) if self.function_entropies else 0.0
         sections_min_virtualsize = np.min(self.function_sizes) if self.function_sizes else 0.0
