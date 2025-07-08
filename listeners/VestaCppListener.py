@@ -29,7 +29,20 @@ def calculate_entropy(data: bytes) -> float:
 class VestaCppListener(CPP14ParserListener):
     """
     ANTLR4-based listener designed to extract an enriched report from C++ source code.
+
+    Attributes:
+        token_stream (CommonTokenStream): Token stream from the parser.
+        static_findings (List[Dict]): Collected findings from the source code.
+        function_entropies (List[float]): Entropy values for each method body.
+        function_sizes (List[int]): Character length of each method.
+        string_entropies (List[float]): Entropy values for each string literal.
+        include_count (int): Number of # include declarations.
+        class_and_function_count (int): Number of classes, methods and functions founded.
+        has_main_function (int): 1 if a main function is founded, else 0.
+        _finding_ids (Set[Tuple]): Internal set to avoid duplicate findings.
+        cpp_signatures (CppSignatures): Reference to static rules and patterns.
     """
+    
     def __init__(self, token_stream: CommonTokenStream) -> None:
         """
         Initializes the VestaCppListener with a token stream.
@@ -46,8 +59,7 @@ class VestaCppListener(CPP14ParserListener):
         self.function_sizes: List[int] = []
         self.string_entropies: List[float] = []
         self.include_count: int = 0 # Count of #include directives
-        self.class_count: int = 0
-        self.function_count: int = 0
+        self.class_and_function_count: int = 0
         self.has_main_function: int = 0 # For AddressOfEntryPoint
         self._finding_ids: Set[Tuple] = set()
         self._pre_analyze_includes()
@@ -96,7 +108,7 @@ class VestaCppListener(CPP14ParserListener):
         Args:
             ctx (CPP14Parser.ClassSpecifierContext): Parsing context.
         """
-        self.class_count += 1
+        self.class_and_function_count += 1
         class_name: str = "UNKNOWN_CLASS"
         if ctx.classHead().classHeadName():
             class_name = ctx.classHead().classHeadName().getText()
@@ -125,7 +137,7 @@ class VestaCppListener(CPP14ParserListener):
         Args:
             ctx (CPP14Parser.FunctionDefinitionContext): Parsing context.
         """
-        self.function_count += 1
+        self.class_and_function_count += 1
         function_name: str = "UNKNOWN_FUNCTION"
         try:
             for child in ctx.declarator().pointerDeclarator().noPointerDeclarator().children:
@@ -339,7 +351,7 @@ class VestaCppListener(CPP14ParserListener):
 
         feature_vector: Dict[str, float] = {
             'SectionsMaxEntropy': sections_max_entropy,
-            'SizeOfStackReserve': float(self.class_count + self.function_count), # C++ has classes and functions
+            'SizeOfStackReserve': float(self.class_and_function_count), # C++ has classes and functions
             'SectionsMinVirtualsize': float(sections_min_virtualsize),
             'ResourcesMinEntropy': resources_min_entropy,
             'MajorLinkerVersion': 1.0,  # Placeholder

@@ -39,7 +39,7 @@ class VestaJavaListener(JavaParserListener):
         method_sizes (List[int]): Character length of each method.
         string_entropies (List[float]): Entropy values for each string literal.
         import_count (int): Number of import and package declarations.
-        class_and_method_count (int): Number of classes and methods encountered.
+        class_and_method_count (int): Number of classes and methods founded.
         has_main_method (int): 1 if a main method is found, else 0.
         _finding_ids (Set[Tuple]): Internal set to avoid duplicate findings.
         java_signatures (JavaSignatures): Reference to static rules and patterns.

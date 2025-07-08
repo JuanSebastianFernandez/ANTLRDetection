@@ -30,7 +30,20 @@ class VestaCListener(CListener):
     """
     ANTLR4-based listener designed to extract an enriched report from C source code,
     adapted to the structure of the provided parsers and lexers.
+
+    Attributes:
+        token_stream (CommonTokenStream): Token stream from the parser.
+        static_findings (List[Dict]): Collected findings from the source code.
+        function_entropies (List[float]): Entropy values for each method body.
+        function_sizes (List[int]): Character length of each method.
+        string_entropies (List[float]): Entropy values for each string literal.
+        include_count (int): Number of # include declarations.
+        function_count (int): Number of functions founded.
+        has_main_function (int): 1 if a main function is founded, else 0.
+        _finding_ids (Set[Tuple]): Internal set to avoid duplicate findings.
+        c_signatures (CSignatures): Reference to static rules and patterns.
     """
+    
     def __init__(self, token_stream: CommonTokenStream) -> None:
         """
         Initializes the VestaCListener with a token stream.

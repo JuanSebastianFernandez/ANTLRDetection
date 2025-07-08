@@ -28,7 +28,20 @@ def calculate_entropy(data: bytes) -> float:
 class VestaJavaScriptListener(JavaScriptParserListener):
     """
     ANTLR4-based listener designed to extract an enriched report from JavaScript source code.
+
+    Attributes:
+        token_stream (CommonTokenStream): Token stream from the parser.
+        static_findings (List[Dict]): Collected findings from the source code.
+        function_entropies (List[float]): Entropy values for each method body.
+        function_sizes (List[int]): Character length of each method.
+        string_entropies (List[float]): Entropy values for each string literal.
+        import_count (int): Number of import and requires declarations.
+        class_and_function_count (int): Number of classes, methods and functions founded.
+        has_main_function (int): 1 if a main function is founded, else 0.
+        _finding_ids (Set[Tuple]): Internal set to avoid duplicate findings.
+        js_signatures (JavaScriptSignatures): Reference to static rules and patterns.
     """
+
     def __init__(self, token_stream: CommonTokenStream) -> None:
         """
         Initializes the VestaJavaScriptListener with a token stream.
