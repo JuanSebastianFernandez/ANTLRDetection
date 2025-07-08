@@ -187,7 +187,7 @@ cd ..
 Once all dependencies and parsers are set up, run the main script to analyze code samples:
 
 ```bash
-python -m handleListeners.main
+python -m main
 ```
 
 This will execute `main.py`, which uses `AntlrListenerHandler` to analyze files in `codeSamples/` and print enriched reports to the console.
