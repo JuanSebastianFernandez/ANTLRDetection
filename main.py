@@ -34,20 +34,20 @@ def run_analysis_tests() -> None:
         JS_SAMPLE_FILE
     ]
 
-    for file_path in reports_to_run:
-        print(f"\n\n===== Analyzing file: {file_path} =====")
-        try:
-            report: Dict[str, Any] = handler.analyze_file(file_path)
-            print(json.dumps(report, indent=4, ensure_ascii=False))
-        except Exception as e:
-            print(f"FATAL ERROR processing {file_path}: {e}")
+    # for file_path in reports_to_run:
+    #     print(f"\n\n===== Analyzing file: {file_path} =====")
+    #     try:
+    #         report: Dict[str, Any] = handler.analyze_file(file_path)
+    #         print(json.dumps(report, indent=4, ensure_ascii=False))
+    #     except Exception as e:
+    #         print(f"FATAL ERROR processing {file_path}: {e}")
 
     # --- Optional: Run analysis on an entire directory ---
-    # print(f"\n\n===== Analyzing directory: {ROOT_DIR_FOR_TESTS} =====")
-    # all_reports = handler.analyze_directory(ROOT_DIR_FOR_TESTS)
-    # for report in all_reports:
-    #     print(json.dumps(report, indent=4, ensure_ascii=False))
-    #     print("\n-------------------------------------------------\n")
+    print(f"\n\n===== Analyzing directory: {ROOT_DIR_FOR_TESTS} =====")
+    all_reports = handler.analyze_directory(ROOT_DIR_FOR_TESTS)
+    for report in all_reports:
+        print(json.dumps(report, indent=4, ensure_ascii=False))
+        print("\n-------------------------------------------------\n")
 
     print("\nANTLR4 test analysis finished.")
 

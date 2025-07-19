@@ -246,3 +246,23 @@ class AntlrListenerHandler:
                 "feature_vector": {},
                 "static_findings": []
             }
+    
+    def analyze_directory(self, directory_path: str) -> List[Dict[str, Any]]:
+        """
+        Analyzes all files in a directory and returns a list of reports.
+
+        Args:
+            directory_path (str): The full path to the directory.
+
+        Returns:
+            List[Dict[str, Any]]: A list of analysis reports for each file in the directory.
+        """
+        reports: List[Dict[str, Any]] = []
+
+        for root, _, files in os.walk(directory_path):
+            for file in files:
+                file_path = os.path.join(root, file)
+                report = self.analyze_file(file_path)
+                reports.append(report)
+
+        return reports
