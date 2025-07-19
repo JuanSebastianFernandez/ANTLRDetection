@@ -115,6 +115,17 @@ class AntlrListenerHandler:
     Handles the dynamic loading and execution of ANTLR4 lexers, parsers, and listeners
     for different programming languages to perform static analysis.
     """
+
+    # Ignored directories completly (e.g., Git directories, Virtual environment,.....)
+    DEFAULT_IGNORED_DIRS: List[str] = ['.git', '.svn', '.hg', '.venv', 'venv', 'node_modules', '__pycache__', 'build', 'dist']
+    # Name file patterns ignorared (e.g., Setting files, General documentation, .....)
+    DEFAULT_IGNORED_FILE_PATTERNS: List[str] = [
+        '.gitignore', 'LICENSE', 'README.md', 'README.txt', 'package-lock.json', 
+        'yarn.lock', 'Gemfile.lock', 'Pipfile.lock', 'requirements.txt', 
+        'Dockerfile', 'Makefile', '.editorconfig', '.prettierrc', '.eslintrc',
+        '.DS_Store', 'Thumbs.db'
+    ]
+
     def __init__(self) -> None:
         """
         Initializes the AntlrListenerHandler.
@@ -249,20 +260,27 @@ class AntlrListenerHandler:
     
     def analyze_directory(self, directory_path: str) -> List[Dict[str, Any]]:
         """
-        Analyzes all files in a directory and returns a list of reports.
+        Analyzes all supported source code files in a directory and its subdirectories recursively,
+        ignoring specified directories and file patterns.
 
         Args:
-            directory_path (str): The full path to the directory.
+            directory_path (str): The path to the directory to analyze.
 
         Returns:
-            List[Dict[str, Any]]: A list of analysis reports for each file in the directory.
+            List[Dict[str, Any]]: A list of dictionaries, where each dictionary is an analysis report for a file.
         """
         reports: List[Dict[str, Any]] = []
+        for root, dirs, files in os.walk(directory_path):
+            # --- Filter Ignored Directories ---
+            # Modifica 'dirs' in-place para que os.walk no entre en ellos
+            dirs[:] = [d for d in dirs if d not in self.DEFAULT_IGNORED_DIRS]
 
-        for root, _, files in os.walk(directory_path):
-            for file in files:
-                file_path = os.path.join(root, file)
+            for file_name in files:
+                # --- Filter Ignored Files---
+                if file_name in self.DEFAULT_IGNORED_FILE_PATTERNS:
+                    continue # Skip file
+
+                file_path = os.path.join(root, file_name)
                 report = self.analyze_file(file_path)
                 reports.append(report)
-
         return reports
