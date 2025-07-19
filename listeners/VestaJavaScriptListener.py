@@ -169,10 +169,21 @@ class VestaJavaScriptListener(JavaScriptParserListener):
         Args:
             ctx (JavaScriptParser.MethodDefinitionContext): Parsing context.
         """
+        method_name = "UNKNOWN_METHOD"
+
         self.class_and_function_count += 1 # Count methods as functions
-        method_name: str = ctx.classElementName().getText()
+        if ctx.classElementName():
+            # print(ctx.classElementName().getText()) # debugging
+            method_name: str = ctx.classElementName().getText()
+        elif ctx.getter():
+            # print(ctx.getter().classElementName().getText())  # debugging
+            method_name: str = ctx.getter().getText()           # Selected all get because the name may be short, but 'get' and 'set' are methods to acces the attributes
+        elif ctx.setter():
+            # print(ctx.setter().classElementName().getText())    # debugging
+            method_name: str = ctx.setter().getText()           # Selected all set because the name may be short, but 'get' and 'set' are methods to acces the attributes
+
         # print(f"Method detected: {method_name}") # debugging
-        
+
         details: Dict = self.js_signatures.NAMING_CONVENTIONS["OBFUSCATED_METHOD_SHORT_NAME"]
         if method_name and len(method_name) <= 2:
             self.add_finding({
@@ -181,7 +192,7 @@ class VestaJavaScriptListener(JavaScriptParserListener):
                 "line": ctx.start.line, 
                 "severity": details["severity"]
             })
-        elif not method_name:
+        elif method_name == "UNKNOWN_METHOD":
             self.add_finding({
                 "finding_type": details["type"],
                 "description": "Method with unidentifiable name or unexpected structure (possible obfuscation).",
@@ -253,7 +264,8 @@ class VestaJavaScriptListener(JavaScriptParserListener):
             ctx (JavaScriptParser.ExpressionStatementContext): Parsing context.
         """
         # Search for dangerous call patterns in the expression text
-        expression_text: str = self.token_stream.getText(ctx.start.tokenIndex, ctx.stop.tokenIndex)
+        
+        expression_text: str = ctx.expressionSequence().getText()
         # print(expression_text) # debugging
         for pattern, details in self.js_signatures.METHOD_CALLS.items():
             if pattern in expression_text:

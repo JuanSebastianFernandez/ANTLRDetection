@@ -16,7 +16,7 @@ C_SAMPLE_FILE: str = os.path.join(ROOT_DIR_FOR_TESTS, 'C', 'vulnerable_sample.c'
 CPP_SAMPLE_FILE: str = os.path.join(ROOT_DIR_FOR_TESTS, 'Cpp', 'vulnerable_sample.cpp') # C++ test file
 JS_SAMPLE_FILE: str = os.path.join(ROOT_DIR_FOR_TESTS, 'JavaScript', 'vulnerable_sample.js') # JavaScript test file
 
-ROOT_DIR_FOR_TESTS = os.path.join(ROOT_DIR_FOR_TESTS, 'CPP')
+
 
 def run_analysis_tests() -> None:
     """
@@ -26,14 +26,14 @@ def run_analysis_tests() -> None:
     handler: AntlrListenerHandler = AntlrListenerHandler()
 
     reports_to_run: List[str] = [
-        JAVA_SAMPLE_FILE,
-        JAVA_SAMPLE_FILE_2,  # Added another Java file for testing
-        PYTHON_SAMPLE_FILE,
-        UNSUPPORTED_FILE,
-        MALFORMED_PYTHON_FILE,
-        C_SAMPLE_FILE,
-        CPP_SAMPLE_FILE,
-        JS_SAMPLE_FILE
+        # JAVA_SAMPLE_FILE,
+        # JAVA_SAMPLE_FILE_2,  # Added another Java file for testing
+        # PYTHON_SAMPLE_FILE,
+        # UNSUPPORTED_FILE,
+        # MALFORMED_PYTHON_FILE,
+        # C_SAMPLE_FILE,
+        # CPP_SAMPLE_FILE,
+        # JS_SAMPLE_FILE
     ]
 
     # for file_path in reports_to_run:
