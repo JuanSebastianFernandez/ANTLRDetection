@@ -7,25 +7,6 @@ from grammars.Python.PythonParser import PythonParser
 from grammars.Python.PythonParserListener import PythonParserListener 
 from signatures.finding_types import PythonSignatures, SENSITIVE_PATH_REGEX_GLOBAL
 
-
-def calculate_entropy(data: bytes) -> float:
-    """
-    Calculate the Shannon entropy of a byte sequence.
-
-    Args:
-        data (bytes): Input byte sequence to analyze.
-
-    Returns:
-        float: Calculated entropy value. Returns 0.0 for empty input.
-    """
-    if not data:
-        return 0.0
-    occurrences = np.bincount(np.frombuffer(data, dtype=np.uint8), minlength=256)
-    probabilities = occurrences / len(data)
-    entropy = -np.sum([p * np.log2(p) for p in probabilities if p > 0])
-    return entropy
-
-
 class VestaPythonListener(PythonParserListener):
     """
     ANTLR4-based listener designed to extract an enriched report from Python source code,
@@ -34,12 +15,6 @@ class VestaPythonListener(PythonParserListener):
     Attributes:
         token_stream (CommonTokenStream): Token stream from the parser.
         static_findings (List[Dict]): Collected findings from the source code.
-        function_entropies (List[float]): Entropy values for each method body.
-        function_sizes (List[int]): Character length of each method.
-        string_entropies (List[float]): Entropy values for each string literal.
-        import_count (int): Number of import declarations.
-        class_and_function_count (int): Number of classes, methods and functions founded.
-        has_main_entry_point (int): 1 if a main entry is founded, else 0.
         _finding_ids (Set[Tuple]): Internal set to avoid duplicate findings.
         python_signatures (PythonSignatures): Reference to static rules and patterns.
     """
@@ -54,12 +29,6 @@ class VestaPythonListener(PythonParserListener):
         self.token_stream: CommonTokenStream = token_stream
         self.static_findings: list[dict] = []
         self.python_signatures: PythonSignatures = PythonSignatures()
-        self.function_entropies: list[float] = []
-        self.function_sizes: list[int] = []
-        self.string_entropies: list[float] = []
-        self.import_count: int = 0
-        self.class_and_function_count: int = 0
-        self.has_main_entry_point: int = 0
         self._finding_ids: set[tuple] = set()
 
     def add_finding(self, finding: dict) -> None:
@@ -70,7 +39,7 @@ class VestaPythonListener(PythonParserListener):
             finding (dict): Finding dictionary with keys 'finding_type', 'line', etc.
         """
         # Using a tuple to check for finding uniqueness
-        finding_id = (finding['finding_type'], finding['line'], finding['description'])
+        finding_id = (finding['finding_type'], finding['line'])
         if finding_id not in self._finding_ids:
             self.static_findings.append(finding)
             self._finding_ids.add(finding_id)
@@ -83,17 +52,18 @@ class VestaPythonListener(PythonParserListener):
         Args:
             ctx (PythonParser.Import_stmtContext): Parsing context.
         """
-        self.import_count += 1
         import_text = self.token_stream.getText(ctx.start.tokenIndex, ctx.stop.tokenIndex)
         for pattern, details in self.python_signatures.IMPORTS.items():
             # Use re.escape for patterns with dots (e.g., os.path)
             if re.search(r'\b' + re.escape(pattern) + r'\b', import_text): 
                 self.add_finding({
-                    "finding_type": details["type"],
-                    "description": f"Suspicious import detected: '{pattern}'. Indicates: {details['desc']}",
-                    "line": ctx.start.line, 
-                    "severity": details["severity"]
-                })
+                        "finding_type": details.get("type", "No type provided"),
+                        "description": f"{details.get('desc', '')} In import path: '{pattern}'",
+                        "line": ctx.start.line, 
+                        "severity": details.get("severity", "No severity provided"),
+                        "weight": details.get("weight", 1.0),
+                        "behavioral_trigger": details.get("behavioral_trigger", None)
+                    })
 
     def enterClass_def_raw(self, ctx: PythonParser.Class_def_rawContext) -> None:
         """
@@ -103,7 +73,6 @@ class VestaPythonListener(PythonParserListener):
         Args:
             ctx (PythonParser.Class_def_rawContext): Parsing context.
         """
-        self.class_and_function_count += 1
         class_name = None
         name_ctx = ctx.name()
 
@@ -114,17 +83,21 @@ class VestaPythonListener(PythonParserListener):
         if class_name:
             if len(class_name) <= 2:
                 self.add_finding({
-                    "finding_type": details["type"],
-                    "description": f"Suspiciously short class name: '{class_name}'",
+                    "finding_type": details.get("type", "No type provided"),
+                    "description": f"{details.get('desc', '')} '{class_name}', possible obfuscation",
                     "line": ctx.start.line, 
-                    "severity": details["severity"]
+                    "severity": details.get("severity", "No severity provided"),
+                    "weight": details.get("weight", 1.0),
+                    "behavioral_trigger": details.get("behavioral_trigger", None)
                 })
         else:
             self.add_finding({
-                "finding_type": details["type"], 
-                "description": "Class with an unidentifiable name, no name, or unexpected structure (possible obfuscation).",
+                "finding_type": details.get("type", "No type provided"),
+                "description": "Class with unidentifiable name or unexpected structure (possible obfuscation).",
                 "line": ctx.start.line, 
-                "severity": details["severity"]
+                "severity": details.get("severity", "No severity provided"),
+                "weight": details.get("weight", 1.0),
+                "behavioral_trigger": details.get("behavioral_trigger", None)
             })
 
     def exitFunction_def_raw(self, ctx: PythonParser.Function_def_rawContext) -> None:
@@ -135,20 +108,21 @@ class VestaPythonListener(PythonParserListener):
         Args:
             ctx (PythonParser.Function_def_rawContext): Parsing context.
         """
-        self.class_and_function_count += 1
         function_name = None
         name_ctx = ctx.name()
         if name_ctx:
             function_name = name_ctx.getText()
 
-        details = self.python_signatures.NAMING_CONVENTIONS["OBFUSCATED_METHOD_SHORT_NAME"]
+        details = self.python_signatures.NAMING_CONVENTIONS["OBFUSCATED_FUNCTION_SHORT_NAME"]
         if function_name:
             if len(function_name) <= 2:
                 self.add_finding({
-                    "finding_type": details["type"],
-                    "description": f"Suspiciously short function name: '{function_name}()'",
+                    "finding_type": details.get("type", "No type provided"),
+                    "description": f"{details.get('desc', '')} '{function_name}()', possible obfuscation",
                     "line": ctx.start.line, 
-                    "severity": details["severity"]
+                    "severity": details.get("severity", "No severity provided"),
+                    "weight": details.get("weight", 1.0),
+                    "behavioral_trigger": details.get("behavioral_trigger", None)
                 })
             # --- Detection: Suspicious polymorphism and override (adapted for Python) ---
             # A function body that only contains 'pass' or is very simple
@@ -159,25 +133,22 @@ class VestaPythonListener(PythonParserListener):
                     # If there's a single 'pass' statement, it's considered suspicious
                     details = self.python_signatures.STRUCTURAL_PATTERNS["SUSPICIOUS_PASS_BODY"]
                     self.add_finding({
-                        "finding_type": details["type"], 
-                        "description": f"Function '{function_name}' has a single 'pass' body, possibly an evasion or obfuscation technique.",
+                        "finding_type": details.get("type", "No type provided"), 
+                        "description": f"{details.get('desc', '')} Function '{function_name}'.",
                         "line": ctx.start.line, 
-                        "severity": details["severity"]
+                        "severity": details.get("severity", "No severity provided"),
+                        "weight": details.get("weight", 1.0),
+                        "behavioral_trigger": details.get("behavioral_trigger", None)
                         })
         else:
             self.add_finding({
-                "finding_type": details["type"], 
-                "description": "Function with an unidentifiable name or unexpected structure (possible obfuscation).",
+                "finding_type": details.get("type", "No type provided"),
+                "description": "Function with unidentifiable name or unexpected structure (possible obfuscation).",
                 "line": ctx.start.line, 
-                "severity": details["severity"]
+                "severity": details.get("severity", "No severity provided"),
+                "weight": details.get("weight", 1.0),
+                "behavioral_trigger": details.get("behavioral_trigger", None)
             })
-
-        # Get the full function text for entropy and size calculation
-        start_index = ctx.start.tokenIndex
-        stop_index = ctx.stop.tokenIndex
-        function_text = self.token_stream.getText(start_index, stop_index)
-        self.function_entropies.append(calculate_entropy(function_text.encode('utf-8')))
-        self.function_sizes.append(len(function_text))
 
     def enterStrings(self, ctx: PythonParser.StringsContext) -> None:
         """
@@ -204,24 +175,27 @@ class VestaPythonListener(PythonParserListener):
                     full_string_content += child.getText().strip("'\"")
 
         if full_string_content:
-            self.string_entropies.append(calculate_entropy(full_string_content.encode('utf-8')))
             # Search for secrets and sensitive paths
             if SENSITIVE_PATH_REGEX_GLOBAL.search(full_string_content):
                 details = self.python_signatures.STRUCTURAL_PATTERNS["SENSITIVE_PATH_ACCESS"]
                 self.add_finding({
-                    "finding_type": details["type"],
-                    "description": f"Code contains a string that appears to be a sensitive system file/directory path: '{full_string_content}'.",
+                    "finding_type": details.get("type", "No type provided"),
+                    "description": f"{details.get('desc', '')} Detected in: {full_string_content}",
                     "line": ctx.start.line, 
-                    "severity": details["severity"]
+                    "severity": details.get("severity", "No severity provided"),
+                    "weight": details.get("weight", 1.0),
+                    "behavioral_trigger": details.get("behavioral_trigger", None)
                 })
             
             for keyword, details in self.python_signatures.STRING_KEYWORDS.items(): 
                 if re.search(keyword, full_string_content, re.IGNORECASE):
                     self.add_finding({
-                        "finding_type": details["type"],
-                        "description": f"Possible secret/credential found in a string literal containing '{keyword}'",
+                        "finding_type": details.get("type", "No type provided"),
+                        "description": f"{details.get('desc', '')} Found in a string literal containing '{keyword}'",
                         "line": ctx.start.line, 
-                        "severity": details["severity"]
+                        "severity": details.get("severity", "No severity provided"),
+                        "weight": details.get("weight", 1.0),
+                        "behavioral_trigger": details.get("behavioral_trigger", None)
                     })
     
     def enterSimple_stmt(self, ctx: PythonParser.Simple_stmtContext) -> None:
@@ -239,37 +213,13 @@ class VestaPythonListener(PythonParserListener):
                 if pattern == "subprocess.run" and "shell=True" not in statement_text: 
                     continue 
                 self.add_finding({
-                    "finding_type": details["type"],
-                    "description": f"Use of a potentially dangerous call/pattern detected: '{pattern}'",
+                    "finding_type": details.get("type", "No type provided"),
+                    "description": f"{details.get('desc', '')} Detected in: '{pattern}'",
                     "line": ctx.start.line, 
-                    "severity": details["severity"]
+                    "severity": details.get("severity", "No severity provided"),
+                    "weight": details.get("weight", 1.0),
+                    "behavioral_trigger": details.get("behavioral_trigger", None)
                 })
-        
-        patterns_self_modification = ["Path(__file__)", "os.path.abspath(__file__)", "sys.argv[0]", "open(__file__)"]
-            
-        for pattern in patterns_self_modification:
-            if pattern in statement_text:
-                # If a self-modification pattern is found, add a finding
-                details = self.python_signatures.STRUCTURAL_PATTERNS["SELF_AWARE_CODE_PATH"]
-                self.add_finding({
-                    "finding_type": details["type"],
-                    "description": f"Code attempts to access its own execution path using: {pattern} (possible prelude to self-modification/encryption).",
-                    "line": ctx.start.line, 
-                    "severity": details["severity"]
-                })
-            
-    def enterIf_stmt(self, ctx: PythonParser.If_stmtContext) -> None:
-        """
-        Triggered upon entering an if statement.
-        Detects the presence of a main entry point ('if __name__ == "__main__"').
-
-        Args:
-            ctx (PythonParser.If_stmtContext): Parsing context.
-        """
-        # The 'if' condition is in ctx.named_expression() which in turn contains the 'expression'
-        condition_text = self.token_stream.getText(ctx.named_expression().start.tokenIndex, ctx.named_expression().stop.tokenIndex)
-        if "__name__" in condition_text and ("'__main__'" in condition_text or '"__main__"' in condition_text):
-            self.has_main_entry_point = 1
 
     def enterExcept_block(self, ctx: PythonParser.Except_blockContext) -> None:
         """
@@ -285,11 +235,13 @@ class VestaPythonListener(PythonParserListener):
             if self._detected_pass_in_statements(statements):
                 details = self.python_signatures.STRUCTURAL_PATTERNS["EMPTY_EXCEPT_BLOCK"]
                 self.add_finding({
-                    "finding_type": details["type"],
-                    "description": "Empty 'except' block or with a 'pass' body, which can hide critical errors.",
+                    "finding_type": details.get("type", "No type provided"),
+                    "description": details.get('desc', ''),
                     "line": ctx.start.line, 
-                    "severity": details["severity"]
-                })
+                    "severity": details.get("severity", "No severity provided"),
+                    "weight": details.get("weight", 1.0),
+                    "behavioral_trigger": details.get("behavioral_trigger", None)
+            })
 
     def _detected_pass_in_statements(self, statements: list[ParserRuleContext]) -> bool:
         """
@@ -320,29 +272,47 @@ class VestaPythonListener(PythonParserListener):
                 - 'feature_vector': Feature values useful for ML models or heuristics.
                 - 'static_findings': List of detected static issues in the code.
         """
-        sections_max_entropy = np.max(self.function_entropies) if self.function_entropies else 0.0
-        sections_min_entropy = np.min(self.function_entropies) if self.function_entropies else 0.0
-        sections_min_virtualsize = np.min(self.function_sizes) if self.function_sizes else 0.0
-        resources_min_entropy = np.min(self.string_entropies) if self.string_entropies else 0.0
+        self.static_findings = sorted(self.static_findings, key=lambda x: (x['line'], x['finding_type']))
+        self.static_findings = [self.static_findings[i] for i in range(len(self.static_findings)) 
+                                if i == 0 or (self.static_findings[i]['finding_type'], self.static_findings[i]['description']) !=
+                                (self.static_findings[i-1]['finding_type'], self.static_findings[i-1]['description'])]
 
-        feature_vector = {
-            'SectionsMaxEntropy': sections_max_entropy,
-            'SizeOfStackReserve': float(self.class_and_function_count),
-            'SectionsMinVirtualsize': float(sections_min_virtualsize),
-            'ResourcesMinEntropy': resources_min_entropy,
-            'MajorLinkerVersion': 1.0,  # Placeholder
-            'SizeOfOptionalHeader': float(self.import_count),
-            'AddressOfEntryPoint': float(self.has_main_entry_point),
-            'SectionsMinEntropy': sections_min_entropy,
-            'MinorOperatingSystemVersion': 0.0,  # Placeholder
-            'SectionAlignment': 0.0,  # Placeholder
-            'SizeOfHeaders': float(self.import_count),
-            'LoaderFlags': 0.0,  # Placeholder
-        }
+        behavioral_trigger_counts: dict[str, int] = {}
+        for finding in self.static_findings:
+            trigger = finding.get("behavioral_trigger")
+            if trigger:
+                behavioral_trigger_counts[trigger] = behavioral_trigger_counts.get(trigger, 0) + 1
         
-        final_report = {
-            "feature_vector": feature_vector,
-            "static_findings": self.static_findings
+        # 2. Generamos hallazgos de comportamiento consolidados para el reporte si se cumple el umbral.
+        #    Esta lógica es para la detección en vivo.
+        if behavioral_trigger_counts:
+            all_triggers_found = set(behavioral_trigger_counts.keys())
+            for pattern_name, details in self.python_signatures.BEHAVIORAL_PATTERNS.items():
+                required_triggers = set(details["triggers"])
+                if required_triggers:
+                    intersection = required_triggers.intersection(all_triggers_found)
+                    intersection_percentage = len(intersection) / len(required_triggers)
+
+                    if intersection_percentage >= 0.6:  # Umbral de coincidencia del 60%
+                        self.add_finding({
+                            "finding_type": pattern_name,
+                            "description": (
+                                f"BEHAVIORAL PATTERN FOUND: '{pattern_name}' (coincidence of the {intersection_percentage:.2%}). "
+                                f"Triggers founded: {list(intersection)} - {details.get('desc', '')}"
+                            ),
+                            "line": 0,  # Línea 0 indica un hallazgo de archivo completo
+                            "severity": details.get("severity", "No severity provided"),
+                            "weight": details.get("weight", 1.0),
+                            "percentage_of_pattern": f"{intersection_percentage:.2%}"
+                        })
+
+        # 3. Retornamos el informe final
+        original_code_text: str = self.token_stream.getText(0)
+        
+        final_report: dict = {
+            "original_code": original_code_text,
+            "static_findings": self.static_findings,
+            "behavioral_trigger_counts": behavioral_trigger_counts
         }
         
         return final_report

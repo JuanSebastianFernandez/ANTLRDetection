@@ -8,24 +8,6 @@ from grammars.CPP.CPP14ParserListener import CPP14ParserListener
 from signatures.finding_types import CppSignatures, SENSITIVE_PATH_REGEX_GLOBAL 
 from typing import List, Dict, Set, Tuple
 
-
-def calculate_entropy(data: bytes) -> float:
-    """
-    Calculate the Shannon entropy of a byte sequence.
-
-    Args:
-        data (bytes): Input byte sequence to analyze.
-
-    Returns:
-        float: Calculated entropy value. Returns 0.0 for empty input.
-    """
-    if not data: 
-        return 0.0
-    occurences = np.bincount(np.frombuffer(data, dtype=np.uint8), minlength=256)
-    probabilities = occurences / len(data)
-    entropy = -np.sum([p * np.log2(p) for p in probabilities if p > 0])
-    return entropy
-
 class VestaCppListener(CPP14ParserListener):
     """
     ANTLR4-based listener designed to extract an enriched report from C++ source code.
@@ -33,12 +15,6 @@ class VestaCppListener(CPP14ParserListener):
     Attributes:
         token_stream (CommonTokenStream): Token stream from the parser.
         static_findings (List[Dict]): Collected findings from the source code.
-        function_entropies (List[float]): Entropy values for each method body.
-        function_sizes (List[int]): Character length of each method.
-        string_entropies (List[float]): Entropy values for each string literal.
-        include_count (int): Number of # include declarations.
-        class_and_function_count (int): Number of classes, methods and functions founded.
-        has_main_function (int): 1 if a main function is founded, else 0.
         _finding_ids (Set[Tuple]): Internal set to avoid duplicate findings.
         cpp_signatures (CppSignatures): Reference to static rules and patterns.
     """
@@ -53,14 +29,6 @@ class VestaCppListener(CPP14ParserListener):
         self.token_stream: CommonTokenStream = token_stream
         self.static_findings: List[Dict] = []
         self.cpp_signatures: CppSignatures = CppSignatures() # Instance of C++ specific signatures
-
-        # Data collection for the 12 features
-        self.function_entropies: List[float] = []
-        self.function_sizes: List[int] = []
-        self.string_entropies: List[float] = []
-        self.include_count: int = 0 # Count of #include directives
-        self.class_and_function_count: int = 0
-        self.has_main_function: int = 0 # For AddressOfEntryPoint
         self._finding_ids: Set[Tuple] = set()
         self._pre_analyze_includes()
 
@@ -71,17 +39,17 @@ class VestaCppListener(CPP14ParserListener):
         self.token_stream.seek(0)
         for token in self.token_stream.tokens:
             if token.channel == Token.HIDDEN_CHANNEL and token.text.strip().startswith('#include'):
-                self.include_count += 1
                 include_text: str = token.text.strip()
-
                 for pattern, details in self.cpp_signatures.IMPORTS.items():
                     # Search for the header pattern (e.g., "iostream", "windows.h")
                     if pattern in include_text: 
                         self.add_finding({
-                            "finding_type": details["type"],
-                            "description": f"Suspicious header inclusion detected: '{include_text}'. Indicates: {details['desc']}",
+                            "finding_type": details.get("type", "No type provided"),
+                            "description": f"{details.get('desc', '')} In import path: '{pattern}'",
                             "line": token.line, 
-                            "severity": details["severity"]
+                            "severity": details.get("severity", "No severity provided"),
+                            "weight": details.get("weight", 1.0),
+                            "behavioral_trigger": details.get("behavioral_trigger", None)
                         })
         self.token_stream.seek(0)
 
@@ -108,7 +76,6 @@ class VestaCppListener(CPP14ParserListener):
         Args:
             ctx (CPP14Parser.ClassSpecifierContext): Parsing context.
         """
-        self.class_and_function_count += 1
         class_name: str = "UNKNOWN_CLASS"
         if ctx.classHead().classHeadName():
             class_name = ctx.classHead().classHeadName().getText()
@@ -116,17 +83,21 @@ class VestaCppListener(CPP14ParserListener):
         details: Dict = self.cpp_signatures.NAMING_CONVENTIONS["OBFUSCATED_CLASS_SHORT_NAME"]
         if class_name != "UNKNOWN_CLASS" and len(class_name) <= 2:
             self.add_finding({
-                "finding_type": details["type"],
-                "description": f"Suspiciously short class name: '{class_name}', possible evasion technique.",
+                "finding_type": details.get("type", "No type provided"),
+                "description": f"{details.get('desc', '')} '{class_name}', possible obfuscation",
                 "line": ctx.start.line, 
-                "severity": details["severity"]
+                "severity": details.get("severity", "No severity provided"),
+                "weight": details.get("weight", 1.0),
+                "behavioral_trigger": details.get("behavioral_trigger", None)
             })
         elif class_name == "UNKNOWN_CLASS":
             self.add_finding({
-                "finding_type": details["type"],
+                "finding_type": details.get("type", "No type provided"),
                 "description": "Class with unidentifiable name or unexpected structure (possible obfuscation).",
                 "line": ctx.start.line, 
-                "severity": details["severity"]
+                "severity": details.get("severity", "No severity provided"),
+                "weight": details.get("weight", 1.0),
+                "behavioral_trigger": details.get("behavioral_trigger", None)
             })
 
     def exitFunctionDefinition(self, ctx: CPP14Parser.FunctionDefinitionContext) -> None:
@@ -137,7 +108,6 @@ class VestaCppListener(CPP14ParserListener):
         Args:
             ctx (CPP14Parser.FunctionDefinitionContext): Parsing context.
         """
-        self.class_and_function_count += 1
         function_name: str = "UNKNOWN_FUNCTION"
         try:
             for child in ctx.declarator().pointerDeclarator().noPointerDeclarator().children:
@@ -147,27 +117,25 @@ class VestaCppListener(CPP14ParserListener):
         except AttributeError:
             pass
         #print(function_name) #debugging
-
         details: Dict = self.cpp_signatures.NAMING_CONVENTIONS["OBFUSCATED_METHOD_SHORT_NAME"]
         if function_name != "UNKNOWN_FUNCTION" and len(function_name) <= 2:
             self.add_finding({
-                "finding_type": details["type"],
-                "description": f"Suspiciously short function name: '{function_name}()', possible evasion technique.",
+                "finding_type": details.get("type", "No type provided"),
+                "description": f"{details.get('desc', '')} '{function_name}()', possible obfuscation",
                 "line": ctx.start.line, 
-                "severity": details["severity"]
+                "severity": details.get("severity", "No severity provided"),
+                "weight": details.get("weight", 1.0),
+                "behavioral_trigger": details.get("behavioral_trigger", None)
             })
         elif function_name == "UNKNOWN_FUNCTION":
             self.add_finding({
-                "finding_type": details["type"],
+                "finding_type": details.get("type", "No type provided"),
                 "description": "Function with unidentifiable name or unexpected structure (possible obfuscation).",
                 "line": ctx.start.line, 
-                "severity": details["severity"]
+                "severity": details.get("severity", "No severity provided"),
+                "weight": details.get("weight", 1.0),
+                "behavioral_trigger": details.get("behavioral_trigger", None)
             })
-
-        # Detection: Main entry point 'main'
-        if function_name == 'main':
-            self.has_main_function = 1
-
         # Detection: Very simple function bodies (proxy for suspicious "override"/evasion)
         # A function body can be a compoundStatement (a {...} block)
 
@@ -176,10 +144,12 @@ class VestaCppListener(CPP14ParserListener):
         if ctx.functionBody().getText() == "{}":  
             details = self.cpp_signatures.STRUCTURAL_PATTERNS["EMPTY_FUNCTION_BODY"]
             self.add_finding({
-                "finding_type": details["type"],
-                "description": f"Function '{function_name}()' has an empty body, possible evasion technique or placeholder.",
+                "finding_type": details.get("type", "No type provided"),
+                "description": f"{details.get('desc', '')} In the function '{function_name}()'.",
                 "line": ctx.start.line, 
-                "severity": details["severity"]
+                "severity": details.get("severity", "No severity provided"),
+                "weight": details.get("weight", 1.0),
+                "behavioral_trigger": details.get("behavioral_trigger", None)
             })
         
         for child in ctx.functionBody().compoundStatement().children:
@@ -197,27 +167,25 @@ class VestaCppListener(CPP14ParserListener):
                             # If it is override and the body is very simple (empty or a single simple statement)
                             details = self.cpp_signatures.STRUCTURAL_PATTERNS["SUSPICIOUS_OVERRIDE"]
                             self.add_finding({
-                                "finding_type": details["type"],
-                                "description": f"Overridden method '{function_name}' has an empty or very simple body, possible evasion technique.",
+                                "finding_type": details.get("type", "No type provided"),
+                                "description": f"{details.get('desc', '')} Function '{function_name}()'.",
                                 "line": ctx.start.line, 
-                                "severity": details["severity"]
+                                "severity": details.get("severity", "No severity provided"),
+                                "weight": details.get("weight", 1.0),
+                                "behavioral_trigger": details.get("behavioral_trigger", None)
                             })
                         else:
                             # If it's not override, but the body is very simple
                             details = self.cpp_signatures.STRUCTURAL_PATTERNS["SIMPLE_FUNCTION_BODY"]
 
                             self.add_finding({
-                                "finding_type": details["type"],
-                                "description": f"Function '{function_name}()' with empty or very simple body, possible evasion technique or placeholder.",
+                                "finding_type": details.get("type", "No type provided"),
+                                "description": f"{details.get('desc', '')} In function '{function_name}'.",
                                 "line": ctx.start.line, 
-                                "severity": details["severity"]
+                                "severity": details.get("severity", "No severity provided"),
+                                "weight": details.get("weight", 1.0),
+                                "behavioral_trigger": details.get("behavioral_trigger", None)
                             })
-
-        start_index: int = ctx.start.tokenIndex
-        stop_index: int = ctx.stop.tokenIndex
-        function_text: str = self.token_stream.getText(start_index, stop_index)
-        self.function_entropies.append(calculate_entropy(function_text.encode('utf-8')))
-        self.function_sizes.append(len(function_text))
 
     def enterLiteral(self, ctx: CPP14Parser.LiteralContext) -> None:
         """
@@ -244,26 +212,28 @@ class VestaCppListener(CPP14ParserListener):
                 string_content = string_text # Fallback if it doesn't match a raw string
 
         if string_content and not string_content.isdigit():
-            # print(string_content) # debugging
-            self.string_entropies.append(calculate_entropy(string_content.encode('utf-8')))
-            
+            # print(string_content) # debugging     
             # Search for secrets and sensitive paths (uses GLOBAL regex)
             if SENSITIVE_PATH_REGEX_GLOBAL.search(string_content):
                 details: Dict = self.cpp_signatures.STRUCTURAL_PATTERNS["SENSITIVE_PATH_ACCESS"]
                 self.add_finding({
-                    "finding_type": details["type"],
-                    "description": f"Sensitive path access detected: '{string_content}'",
+                    "finding_type": details.get("type", "No type provided"),
+                    "description": f"{details.get('desc', '')} Detected in: '{string_content}'",
                     "line": ctx.start.line, 
-                    "severity": details["severity"]
-                })
+                    "severity": details.get("severity", "No severity provided"),
+                    "weight": details.get("weight", 1.0),
+                    "behavioral_trigger": details.get("behavioral_trigger", None)
+                }) 
             
             for keyword, details in self.cpp_signatures.STRING_KEYWORDS.items():
                 if re.search(re.escape(keyword), string_content, re.IGNORECASE):
                     self.add_finding({
-                        "finding_type": details["type"],
-                        "description": f"Possible secret/credential found in a string literal containing '{keyword}'",
+                        "finding_type": details.get("type", "No type provided"),
+                        "description": f"{details.get('desc', '')} Found in '{keyword}'",
                         "line": ctx.start.line, 
-                        "severity": details["severity"]
+                        "severity": details.get("severity", "No severity provided"),
+                        "weight": details.get("weight", 1.0),
+                        "behavioral_trigger": details.get("behavioral_trigger", None)
                     })
     # Use this function only to detect classes that serve for specific calls we don't know.
     # The example contains the search for classes that find 'system'.
@@ -293,12 +263,13 @@ class VestaCppListener(CPP14ParserListener):
             for pattern, details in self.cpp_signatures.METHOD_CALLS.items():
                 if pattern in call_text:
                     self.add_finding({
-                        "finding_type": details["type"],
-                        "description": f"Use of a potentially dangerous call detected: '{pattern}'",
+                        "finding_type": details.get("type", "No type provided"),
+                        "description": f"{details.get('desc', '')} Detected in: '{pattern}'",
                         "line": ctx.start.line, 
-                        "severity": details["severity"]
+                        "severity": details.get("severity", "No severity provided"),
+                        "weight": details.get("weight", 1.0),
+                        "behavioral_trigger": details.get("behavioral_trigger", None)
                     })
-                    break
 
         # Detection: Self-aware code (SELF_AWARE_BEHAVIOR) - argv[0], __FILE__, etc.
         statement_text: str = self.token_stream.getText(ctx.start.tokenIndex, ctx.stop.tokenIndex)
@@ -307,13 +278,15 @@ class VestaCppListener(CPP14ParserListener):
         for pattern in patterns_self_modification:
             if pattern in statement_text:
                 # print(statement_text) # debugging
-                details: Dict = self.cpp_signatures.STRUCTURAL_PATTERNS["SELF_AWARE_CODE_ARGV0"]
+                details: Dict = self.cpp_signatures.STRUCTURAL_PATTERNS["SELF_AWARE_CODE"]
                 self.add_finding({
-                    "finding_type": details["type"],
-                    "description": f"Code attempts to access its own execution path (possible prelude to self-modification/encryption) via {pattern}.",
+                    "finding_type": details.get("type", "No type provided"),
+                    "description": f"{details.get('desc', '')} In '{pattern}'",
                     "line": ctx.start.line, 
-                    "severity": details["severity"]
-                })
+                    "severity": details.get("severity", "No severity provided"),
+                    "weight": details.get("weight", 1.0),
+                    "behavioral_trigger": details.get("behavioral_trigger", None)
+            })
 
     def enterHandler(self, ctx: CPP14Parser.HandlerContext) -> None:
         """
@@ -328,10 +301,12 @@ class VestaCppListener(CPP14ParserListener):
             # print(ctx.compoundStatement().getText()) # debugging
             details: Dict = self.cpp_signatures.STRUCTURAL_PATTERNS["EMPTY_CATCH_BLOCK"]
             self.add_finding({
-                "finding_type": details["type"],
-                "description": "An empty catch block has been detected in C++. Ignoring exceptions can hide critical security errors.",
+                "finding_type": details.get("type", "No type provided"),
+                "description": details.get('desc', ''),
                 "line": ctx.start.line, 
-                "severity": details["severity"]
+                "severity": details.get("severity", "No severity provided"),
+                "weight": details.get("weight", 1.0),
+                "behavioral_trigger": details.get("behavioral_trigger", None)
             })
 
     def get_analysis_report(self) -> Dict:
@@ -344,29 +319,47 @@ class VestaCppListener(CPP14ParserListener):
                 - 'feature_vector': Feature values useful for ML models or heuristics.
                 - 'static_findings': List of detected static issues in the code.
         """
-        sections_max_entropy: float = np.max(self.function_entropies) if self.function_entropies else 0.0
-        sections_min_entropy: float = np.min(self.function_entropies) if self.function_entropies else 0.0
-        sections_min_virtualsize: float = np.min(self.function_sizes) if self.function_sizes else 0.0
-        resources_min_entropy: float = np.min(self.string_entropies) if self.string_entropies else 0.0
+        self.static_findings = sorted(self.static_findings, key=lambda x: (x['line'], x['finding_type']))
+        self.static_findings = [self.static_findings[i] for i in range(len(self.static_findings)) 
+                                if i == 0 or (self.static_findings[i]['finding_type'], self.static_findings[i]['description']) !=
+                                (self.static_findings[i-1]['finding_type'], self.static_findings[i-1]['description'])]
 
-        feature_vector: Dict[str, float] = {
-            'SectionsMaxEntropy': sections_max_entropy,
-            'SizeOfStackReserve': float(self.class_and_function_count), # C++ has classes and functions
-            'SectionsMinVirtualsize': float(sections_min_virtualsize),
-            'ResourcesMinEntropy': resources_min_entropy,
-            'MajorLinkerVersion': 1.0,  # Placeholder
-            'SizeOfOptionalHeader': float(self.include_count), # Count of #include
-            'AddressOfEntryPoint': float(self.has_main_function),
-            'SectionsMinEntropy': sections_min_entropy,
-            'MinorOperatingSystemVersion': 0.0,  # Placeholder
-            'SectionAlignment': 0.0,  # Placeholder
-            'SizeOfHeaders': float(self.include_count), # Count of #include
-            'LoaderFlags': 0.0,  # Placeholder
-        }
+        behavioral_trigger_counts: Dict[str, int] = {}
+        for finding in self.static_findings:
+            trigger = finding.get("behavioral_trigger")
+            if trigger:
+                behavioral_trigger_counts[trigger] = behavioral_trigger_counts.get(trigger, 0) + 1
         
-        final_report: Dict = {
-            "feature_vector": feature_vector,
-            "static_findings": self.static_findings
+        # 2. Generamos hallazgos de comportamiento consolidados para el reporte si se cumple el umbral.
+        #    Esta lógica es para la detección en vivo.
+        if behavioral_trigger_counts:
+            all_triggers_found = set(behavioral_trigger_counts.keys())
+            for pattern_name, details in self.cpp_signatures.BEHAVIORAL_PATTERNS.items():
+                required_triggers = set(details["triggers"])
+                if required_triggers:
+                    intersection = required_triggers.intersection(all_triggers_found)
+                    intersection_percentage = len(intersection) / len(required_triggers)
+
+                    if intersection_percentage >= 0.6:  # Umbral de coincidencia del 60%
+                        self.add_finding({
+                            "finding_type": pattern_name,
+                            "description": (
+                                f"BEHAVIORAL PATTERN FOUND: '{pattern_name}' (coincidence of the {intersection_percentage:.2%}). "
+                                f"Triggers founded: {list(intersection)} - {details.get('desc', '')}"
+                            ),
+                            "line": 0,  # Línea 0 indica un hallazgo de archivo completo
+                            "severity": details.get("severity", "No severity provided"),
+                            "weight": details.get("weight", 1.0),
+                            "percentage_of_pattern": f"{intersection_percentage:.2%}"
+                        })
+
+        # 3. Retornamos el informe final
+        original_code_text: str = self.token_stream.getText(0)
+        
+        final_report: dict = {
+            "original_code": original_code_text,
+            "static_findings": self.static_findings,
+            "behavioral_trigger_counts": behavioral_trigger_counts
         }
         
         return final_report

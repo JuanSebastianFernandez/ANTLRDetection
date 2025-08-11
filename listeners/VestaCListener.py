@@ -8,24 +8,6 @@ from grammars.C.CListener import CListener
 from signatures.finding_types import CSignatures, SENSITIVE_PATH_REGEX_GLOBAL
 from typing import List, Dict, Set, Tuple
 
-
-def calculate_entropy(data: bytes) -> float:
-    """
-    Calculate the Shannon entropy of a byte sequence.
-
-    Args:
-        data (bytes): Input byte sequence to analyze.
-
-    Returns:
-        float: Calculated entropy value. Returns 0.0 for empty input.
-    """
-    if not data: 
-        return 0.0
-    occurences = np.bincount(np.frombuffer(data, dtype=np.uint8), minlength=256)
-    probabilities = occurences / len(data)
-    entropy = -np.sum([p * np.log2(p) for p in probabilities if p > 0])
-    return entropy
-
 class VestaCListener(CListener):
     """
     ANTLR4-based listener designed to extract an enriched report from C source code,
@@ -34,12 +16,6 @@ class VestaCListener(CListener):
     Attributes:
         token_stream (CommonTokenStream): Token stream from the parser.
         static_findings (List[Dict]): Collected findings from the source code.
-        function_entropies (List[float]): Entropy values for each method body.
-        function_sizes (List[int]): Character length of each method.
-        string_entropies (List[float]): Entropy values for each string literal.
-        include_count (int): Number of # include declarations.
-        function_count (int): Number of functions founded.
-        has_main_function (int): 1 if a main function is founded, else 0.
         _finding_ids (Set[Tuple]): Internal set to avoid duplicate findings.
         c_signatures (CSignatures): Reference to static rules and patterns.
     """
@@ -54,14 +30,6 @@ class VestaCListener(CListener):
         self.token_stream: CommonTokenStream = token_stream
         self.static_findings: List[Dict] = []
         self.c_signatures: CSignatures = CSignatures() # Instance of C-specific signatures
-
-        # Data collection for the 12 features
-        self.function_entropies: List[float] = []
-        self.function_sizes: List[int] = []
-        self.string_entropies: List[float] = []
-        self.include_count: int = 0 # Count of #include directives to resemble imports
-        self.function_count: int = 0
-        self.has_main_function: int = 0 # For AddressOfEntryPoint
         self._finding_ids: Set[Tuple] = set()
         self._pre_analyze_includes()  # Pre-analysis to detect #include directives
     
@@ -76,17 +44,17 @@ class VestaCListener(CListener):
         # Iterate through all tokens, including those on the hidden channel
         for token in self.token_stream.tokens:
             if token.channel == Token.HIDDEN_CHANNEL and token.text.strip().startswith('#include'):
-                self.include_count += 1
                 import_text: str = token.text.strip() # The full text of the directive
-                
                 for pattern, details in self.c_signatures.IMPORTS.items():
                     # Search for the header pattern (e.g., "stdio.h")
                     if pattern in import_text: 
                         self.add_finding({
-                            "finding_type": details["type"],
-                            "description": f"Suspicious header inclusion detected: '{import_text}'. Indicates: {details['desc']}",
+                            "finding_type": details.get("type", "No type provided"),
+                            "description": f"{details.get('desc', '')} In import path: '{pattern}'",
                             "line": token.line, 
-                            "severity": details["severity"]
+                            "severity": details.get("severity", "No severity provided"),
+                            "weight": details.get("weight", 1.0),
+                            "behavioral_trigger": details.get("behavioral_trigger", None)
                         })
         # Return to the beginning for the ParserTreeWalker
         self.token_stream.seek(0)
@@ -98,7 +66,7 @@ class VestaCListener(CListener):
         Args:
             finding (Dict): Finding dictionary with keys 'finding_type', 'line', etc.
         """
-        finding_id: Tuple = (finding['finding_type'], finding['line'], finding['description'])
+        finding_id: Tuple = (finding['finding_type'], finding['line'])
         if finding_id not in self._finding_ids:
             self.static_findings.append(finding)
             self._finding_ids.add(finding_id)
@@ -113,7 +81,6 @@ class VestaCListener(CListener):
         """
         # print("Entering exitFunctionDefinition")
         # print(ctx.getText())  # Debugging: Print the function text
-        self.function_count += 1
         function_name: str = "UNKNOWN_FUNCTION"
         try:
             for child in ctx.declarator().directDeclarator().children:
@@ -126,27 +93,26 @@ class VestaCListener(CListener):
         # print(f"Function name detected: {function_name}")  # Debugging
 
         # Detection: Suspiciously short function names (obfuscation)
-        details: Dict = self.c_signatures.NAMING_CONVENTIONS["OBFUSCATED_METHOD_SHORT_NAME"]
+        details: Dict = self.c_signatures.NAMING_CONVENTIONS["OBFUSCATED_FUNCTION_SHORT_NAME"]
         
         if function_name != "UNKNOWN_FUNCTION" and len(function_name) <= 2:
             self.add_finding({
-                "finding_type": details["type"],
-                "description": f"Suspiciously short function name: '{function_name}()'",
+                "finding_type": details.get("type", "No type provided"),
+                "description": f"{details.get('desc', '')} '{function_name}()', possible obfuscation",
                 "line": ctx.start.line, 
-                "severity": details["severity"]
+                "severity": details.get("severity", "No severity provided"),
+                "weight": details.get("weight", 1.0),
+                "behavioral_trigger": details.get("behavioral_trigger", None)
             })
         elif function_name == "UNKNOWN_FUNCTION":
             self.add_finding({
-                "finding_type": details["type"],
+                "finding_type": details.get("type", "No type provided"),
                 "description": "Function with unidentifiable name or unexpected structure (possible obfuscation).",
                 "line": ctx.start.line, 
-                "severity": details["severity"]
+                "severity": details.get("severity", "No severity provided"),
+                "weight": details.get("weight", 1.0),
+                "behavioral_trigger": details.get("behavioral_trigger", None)
             })
-
-        # Detection: Main entry point 'main'
-        if function_name == 'main':
-            # print("Detected main function")  # Debugging
-            self.has_main_function = 1
         
         # Detection: Simple or empty function body
         for child in ctx.compoundStatement().children:
@@ -160,19 +126,13 @@ class VestaCListener(CListener):
                         # If the body is just a 'return;' or similarly simple
                         details = self.c_signatures.STRUCTURAL_PATTERNS["SIMPLE_FUNCTION_BODY"]
                         self.add_finding({
-                            "finding_type": details["type"],
-                            "description": f"Function '{function_name}' with empty or very simple body, possible evasion technique or placeholder.",
+                            "finding_type": details.get("type", "No type provided"),
+                            "description": f"{details.get('desc', '')} In function '{function_name}'.",
                             "line": ctx.start.line, 
-                            "severity": details["severity"]
+                            "severity": details.get("severity", "No severity provided"),
+                            "weight": details.get("weight", 1.0),
+                            "behavioral_trigger": details.get("behavioral_trigger", None)
                         })
-
-
-        # Get the full function text for entropy and size
-        start_index: int = ctx.start.tokenIndex
-        stop_index: int = ctx.stop.tokenIndex
-        function_text: str = self.token_stream.getText(start_index, stop_index)
-        self.function_entropies.append(calculate_entropy(function_text.encode('utf-8')))
-        self.function_sizes.append(len(function_text))
 
     def enterPrimaryExpression(self, ctx: CParser.PrimaryExpressionContext) -> None:
         """
@@ -186,22 +146,25 @@ class VestaCListener(CListener):
             string_content: str = ctx.getText()[1:-1] # Remove quotes
             # print("Detected StringLiteral:", string_content)  # Debugging
             if string_content:
-                self.string_entropies.append(calculate_entropy(string_content.encode('utf-8')))
                 if SENSITIVE_PATH_REGEX_GLOBAL.search(string_content):
                     details: Dict = self.c_signatures.STRUCTURAL_PATTERNS["SENSITIVE_PATH_ACCESS"]
                     self.add_finding({
-                        "finding_type": details["type"],
-                        "description": f"Sensitive path access detected: '{string_content}'",
+                        "finding_type": details.get("type", "No type provided"),
+                        "description": f"{details.get('desc', '')} Detected in: '{string_content}'",
                         "line": ctx.start.line, 
-                        "severity": details["severity"]
+                        "severity": details.get("severity", "No severity provided"),
+                        "weight": details.get("weight", 1.0),
+                        "behavioral_trigger": details.get("behavioral_trigger", None)
                     })       
                 for keyword, details in self.c_signatures.STRING_KEYWORDS.items():
                     if re.search(re.escape(keyword), string_content, re.IGNORECASE):
                         self.add_finding({
-                            "finding_type": details["type"],
-                            "description": f"Possible secret/credential found in a string literal containing '{keyword}'",
+                            "finding_type": details.get("type", "No type provided"),
+                            "description": f"{details.get('desc', '')} Found in '{keyword}'",
                             "line": ctx.start.line, 
-                            "severity": details["severity"]
+                            "severity": details.get("severity", "No severity provided"),
+                            "weight": details.get("weight", 1.0),
+                            "behavioral_trigger": details.get("behavioral_trigger", None)
                         })
 
     def enterPostfixExpression(self, ctx: CParser.PostfixExpressionContext) -> None:
@@ -220,10 +183,12 @@ class VestaCListener(CListener):
             for pattern, details in self.c_signatures.METHOD_CALLS.items():
                 if pattern in call_text:
                     self.add_finding({
-                        "finding_type": details["type"],
-                        "description": f"Use of a potentially dangerous call detected: '{pattern}'",
+                        "finding_type": details.get("type", "No type provided"),
+                        "description": f"{details.get('desc', '')} Detected in: '{pattern}'",
                         "line": ctx.start.line, 
-                        "severity": details["severity"]
+                        "severity": details.get("severity", "No severity provided"),
+                        "weight": details.get("weight", 1.0),
+                        "behavioral_trigger": details.get("behavioral_trigger", None)
                     })
         # Detection: Self-aware code (SELF_AWARE_BEHAVIOR) - argv[0]
         # This can be found in expressions or calls.
@@ -232,10 +197,12 @@ class VestaCListener(CListener):
         if "argv[0]" in call_text or "self" in call_text: # Note: 'self' is not idiomatic for C in this context.
             details: Dict = self.c_signatures.STRUCTURAL_PATTERNS["SELF_AWARE_CODE_ARGV0"]
             self.add_finding({
-                "finding_type": details["type"],
-                "description": "Code attempts to access its own execution name (argv[0])/self.",
+                "finding_type": details.get("type", "No type provided"),
+                "description": details.get('desc', ''),
                 "line": ctx.start.line, 
-                "severity": details["severity"]
+                "severity": details.get("severity", "No severity provided"),
+                "weight": details.get("weight", 1.0),
+                "behavioral_trigger": details.get("behavioral_trigger", None)
             })
 
     # C does not have try-catch/except like Java/Python.
@@ -252,29 +219,47 @@ class VestaCListener(CListener):
                 - 'feature_vector': Feature values useful for ML models or heuristics.
                 - 'static_findings': List of detected static issues in the code.
         """
-        sections_max_entropy: float = np.max(self.function_entropies) if self.function_entropies else 0.0
-        sections_min_entropy: float = np.min(self.function_entropies) if self.function_entropies else 0.0
-        sections_min_virtualsize: float = np.min(self.function_sizes) if self.function_sizes else 0.0
-        resources_min_entropy: float = np.min(self.string_entropies) if self.string_entropies else 0.0
+        self.static_findings = sorted(self.static_findings, key=lambda x: (x['line'], x['finding_type']))
+        self.static_findings = [self.static_findings[i] for i in range(len(self.static_findings)) 
+                                if i == 0 or (self.static_findings[i]['finding_type'], self.static_findings[i]['description']) !=
+                                (self.static_findings[i-1]['finding_type'], self.static_findings[i-1]['description'])]
 
-        feature_vector: Dict[str, float] = {
-            'SectionsMaxEntropy': sections_max_entropy,
-            'SizeOfStackReserve': float(self.function_count), # Only functions for C
-            'SectionsMinVirtualsize': float(sections_min_virtualsize),
-            'ResourcesMinEntropy': resources_min_entropy,
-            'MajorLinkerVersion': 1.0,  # Placeholder
-            'SizeOfOptionalHeader': float(self.include_count), # Count of #include
-            'AddressOfEntryPoint': float(self.has_main_function),
-            'SectionsMinEntropy': sections_min_entropy,
-            'MinorOperatingSystemVersion': 0.0,  # Placeholder
-            'SectionAlignment': 0.0,  # Placeholder
-            'SizeOfHeaders': float(self.include_count), # Count of #include
-            'LoaderFlags': 0.0,  # Placeholder
-        }
+        behavioral_trigger_counts: Dict[str, int] = {}
+        for finding in self.static_findings:
+            trigger = finding.get("behavioral_trigger")
+            if trigger:
+                behavioral_trigger_counts[trigger] = behavioral_trigger_counts.get(trigger, 0) + 1
         
-        final_report: Dict = {
-            "feature_vector": feature_vector,
-            "static_findings": self.static_findings
+        # 2. Generamos hallazgos de comportamiento consolidados para el reporte si se cumple el umbral.
+        #    Esta lógica es para la detección en vivo.
+        if behavioral_trigger_counts:
+            all_triggers_found = set(behavioral_trigger_counts.keys())
+            for pattern_name, details in self.c_signatures.BEHAVIORAL_PATTERNS.items():
+                required_triggers = set(details["triggers"])
+                if required_triggers:
+                    intersection = required_triggers.intersection(all_triggers_found)
+                    intersection_percentage = len(intersection) / len(required_triggers)
+
+                    if intersection_percentage >= 0.6:  # Umbral de coincidencia del 60%
+                        self.add_finding({
+                            "finding_type": pattern_name,
+                            "description": (
+                                f"BEHAVIORAL PATTERN FOUND: '{pattern_name}' (coincidence of the {intersection_percentage:.2%}). "
+                                f"Triggers founded: {list(intersection)} - {details.get('desc', '')}"
+                            ),
+                            "line": 0,  # Línea 0 indica un hallazgo de archivo completo
+                            "severity": details.get("severity", "No severity provided"),
+                            "weight": details.get("weight", 1.0),
+                            "percentage_of_pattern": f"{intersection_percentage:.2%}"
+                        })
+
+        # 3. Retornamos el informe final
+        original_code_text: str = self.token_stream.getText(0)
+        
+        final_report: dict = {
+            "original_code": original_code_text,
+            "static_findings": self.static_findings,
+            "behavioral_trigger_counts": behavioral_trigger_counts
         }
         
         return final_report
